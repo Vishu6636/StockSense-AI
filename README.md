@@ -59,8 +59,7 @@ App runs on: http://localhost:8501
 
 ## API Keys Setup
 
-Create a file:
-
+Create a file: 
 .streamlit/secrets.toml
 
 Add:
