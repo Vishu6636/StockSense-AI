@@ -74,11 +74,11 @@ Required for fallback data and news features.
 
 ## Architecture
 
-app.py              → Main application and routing
-data_service.py     → Data fetching and API fallbacks
-ui_components.py    → UI rendering components
-views/              → Feature pages (Home, Search, Compare, etc.)
-requirements.txt    → Dependencies
+- **app.py**: Main application and routing
+- **data_service.py**: Data fetching and API fallbacks
+- **ui_components.py**: UI rendering components
+- **views/**: Feature pages (Home, Search, Compare, etc.)
+- **requirements.txt**: Dependencies
 
 ---
 
