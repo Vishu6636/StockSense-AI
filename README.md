@@ -65,8 +65,8 @@ Create a file:
 
 Add:
 
-ALPHA_VANTAGE_KEY="your_key_here"
-GNEWS_KEY="your_key_here"
+* ALPHA_VANTAGE_KEY="your_key_here" & 
+* GNEWS_KEY="your_key_here"
 
 Required for fallback data and news features.
 
