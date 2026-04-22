@@ -1,0 +1,27 @@
+# Secrets — NEVER push to GitHub
+.streamlit/secrets.toml
+.env
+.env.*
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Conda environment (local only)
+.conda/
+
+# IDE / OS junk
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Dev-only helper scripts
+create_tickers.py
+gif_b64.txt
+streamlit_log.txt
+trace.txt
+README (1).md
