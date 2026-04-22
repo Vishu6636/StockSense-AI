@@ -12,11 +12,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Yahoo Finance blocks default cloud server IPs. A custom session with a user-agent helps bypass this.
 _yf_session = requests.Session()
 _yf_session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1"
 })
 
 # ── DYNAMIC ASSETS ──
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=86401)
 def load_ticker_list(market: str):
     filename = "tickers_india.json" if market == "🇮🇳 India" else "tickers_us.json"
     if not os.path.exists(filename):
@@ -24,7 +29,7 @@ def load_ticker_list(market: str):
     with open(filename, "r", encoding="utf-8") as f:
         return json.load(f)
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=86401)
 def _precompute_search_index(market: str):
     """Precompute lowercase fields once per market for fast search."""
     tickers = load_ticker_list(market)
@@ -73,7 +78,7 @@ def _nsepython_quote(ticker: str) -> dict:
 
 
 # ── FALLBACK 2: Alpha Vantage (price history, 25 calls/day free) ──
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3601)
 def _alpha_vantage_history(ticker: str) -> pd.DataFrame:
     """OHLCV history fallback. Indian stocks use BSE format. Returns DataFrame or empty."""
     api_key = st.secrets.get("ALPHA_VANTAGE_KEY", "")
@@ -108,7 +113,7 @@ def _alpha_vantage_history(ticker: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 # ── FALLBACK 3: GNews (news, 100 calls/day free, covers Indian sources) ──
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1801)
 def _gnews_fetch(query: str, country: str = "in") -> list:
     """News fallback. Covers ET, NDTV Business, Moneycontrol etc. Returns list or []."""
     api_key = st.secrets.get("GNEWS_KEY", "")
@@ -132,7 +137,7 @@ def _gnews_fetch(query: str, country: str = "in") -> list:
     except Exception:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=301)
 def get_stock_data_safe(ticker, period="1y"):
     # Primary: yfinance
     try:
@@ -233,7 +238,7 @@ def get_index_data(market_indices: dict):
                 results[name] = {"price": 0, "change": 0, "pct": 0}
     return results
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1801)
 def get_stock_info_cached(ticker):
     try:
         t = yf.Ticker(ticker, session=_yf_session)
@@ -241,7 +246,7 @@ def get_stock_info_cached(ticker):
     except Exception:
         return {}
 
-@st.cache_data(ttl=1200)
+@st.cache_data(ttl=1201)
 def get_stock_data(ticker):
     try:
         t = yf.Ticker(ticker, session=_yf_session)
@@ -544,7 +549,7 @@ def extract_news_items(raw_news):
             continue
     return items
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1801)
 def get_market_news(market="🇮🇳 India"):
     index_ticker = "^NSEI" if market == "🇮🇳 India" else "^GSPC"
     try:
@@ -560,7 +565,7 @@ def get_market_news(market="🇮🇳 India"):
     country = "in" if market == "🇮🇳 India" else "us"
     return _gnews_fetch(query, country=country)
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=901)
 def get_ai_summary(ticker, company_name, info_json_str, tech_json_str, currency="₹"):
     try:
         from groq import Groq
