@@ -238,9 +238,49 @@ def get_stock_info_cached(ticker):
 def get_stock_data(ticker):
     try:
         t = yf.Ticker(ticker)
-        info = t.info
-        hist_1y = t.history(period="1y")
-        hist_3m = t.history(period="3mo")
+        
+        info = {}
+        try:
+            info = t.info
+        except Exception:
+            pass
+            
+        if not info:
+            try:
+                fi = t.fast_info
+                info = {
+                    "currentPrice": getattr(fi, "last_price", 0),
+                    "previousClose": getattr(fi, "previous_close", 0),
+                    "marketCap": getattr(fi, "market_cap", 0),
+                    "fiftyTwoWeekHigh": getattr(fi, "year_high", 0),
+                    "fiftyTwoWeekLow": getattr(fi, "year_low", 0),
+                    "longName": ticker
+                }
+            except Exception:
+                pass
+                
+        if not info and (ticker.endswith(".NS") or ticker.endswith(".BO")):
+            q = _nsepython_quote(ticker)
+            if q.get("c"):
+                info = {
+                    "currentPrice": q.get("c"),
+                    "previousClose": q.get("pc"),
+                    "fiftyTwoWeekHigh": q.get("h"),
+                    "fiftyTwoWeekLow": q.get("l"),
+                    "longName": ticker
+                }
+
+        hist_1y = None
+        try:
+            hist_1y = t.history(period="1y")
+        except Exception:
+            pass
+            
+        hist_3m = None
+        try:
+            hist_3m = t.history(period="3mo")
+        except Exception:
+            pass
 
         # News: yfinance first, GNews fallback
         raw_news = []
