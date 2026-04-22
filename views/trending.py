@@ -1,6 +1,6 @@
 import streamlit as st
 import yfinance as yf
-from data_service import load_ticker_list
+from data_service import load_ticker_list, _yf_session
 
 def page_trending():
     market = st.session_state.get("market_mode", "🇮🇳 India")
@@ -34,7 +34,7 @@ def page_trending():
     
     progress.progress(20)
     try:
-        data = yf.download(tickers, period="2d", group_by='ticker', progress=False)
+        data = yf.download(tickers, period="2d", group_by='ticker', progress=False, session=_yf_session)
         for i, (name, ticker) in enumerate(trending):
             try:
                 # If single ticker vs multiple, yfinance formats output differently
