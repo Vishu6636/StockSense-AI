@@ -8,20 +8,10 @@ import datetime
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# ── YFINANCE SESSION FIX FOR STREAMLIT CLOUD ──
-# Yahoo Finance blocks default cloud server IPs. A custom session with a user-agent helps bypass this.
-_yf_session = requests.Session()
-_yf_session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1"
-})
+# Removed custom session as it interferes with yfinance's internal crumb management.
 
 # ── DYNAMIC ASSETS ──
-@st.cache_data(ttl=86401)
+@st.cache_data(ttl=86402)
 def load_ticker_list(market: str):
     filename = "tickers_india.json" if market == "🇮🇳 India" else "tickers_us.json"
     if not os.path.exists(filename):
@@ -29,7 +19,7 @@ def load_ticker_list(market: str):
     with open(filename, "r", encoding="utf-8") as f:
         return json.load(f)
 
-@st.cache_data(ttl=86401)
+@st.cache_data(ttl=86402)
 def _precompute_search_index(market: str):
     """Precompute lowercase fields once per market for fast search."""
     tickers = load_ticker_list(market)
@@ -78,7 +68,7 @@ def _nsepython_quote(ticker: str) -> dict:
 
 
 # ── FALLBACK 2: Alpha Vantage (price history, 25 calls/day free) ──
-@st.cache_data(ttl=3601)
+@st.cache_data(ttl=3602)
 def _alpha_vantage_history(ticker: str) -> pd.DataFrame:
     """OHLCV history fallback. Indian stocks use BSE format. Returns DataFrame or empty."""
     api_key = st.secrets.get("ALPHA_VANTAGE_KEY", "")
@@ -113,7 +103,7 @@ def _alpha_vantage_history(ticker: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 # ── FALLBACK 3: GNews (news, 100 calls/day free, covers Indian sources) ──
-@st.cache_data(ttl=1801)
+@st.cache_data(ttl=1802)
 def _gnews_fetch(query: str, country: str = "in") -> list:
     """News fallback. Covers ET, NDTV Business, Moneycontrol etc. Returns list or []."""
     api_key = st.secrets.get("GNEWS_KEY", "")
@@ -137,15 +127,15 @@ def _gnews_fetch(query: str, country: str = "in") -> list:
     except Exception:
         return []
 
-@st.cache_data(ttl=301)
+@st.cache_data(ttl=302)
 def get_stock_data_safe(ticker, period="1y"):
     # Primary: yfinance
     try:
-        df = yf.download(ticker, period=period, progress=False, auto_adjust=True, session=_yf_session)
+        df = yf.download(ticker, period=period, progress=False, auto_adjust=True)
         if not df.empty:
             return df
         if ticker.endswith(".NS"):
-            df = yf.download(ticker.replace(".NS", ".BO"), period=period, progress=False, auto_adjust=True, session=_yf_session)
+            df = yf.download(ticker.replace(".NS", ".BO"), period=period, progress=False, auto_adjust=True)
             if not df.empty:
                 return df
     except Exception:
@@ -208,13 +198,13 @@ DEFAULT_INVESTORS = [
 ]
 
 # ── DATA FUNCTIONS ──
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=902)
 def get_index_data(market_indices: dict):
     results = {}
     for name, ticker in market_indices.items():
         fetched = False
         try:
-            t = yf.Ticker(ticker, session=_yf_session)
+            t = yf.Ticker(ticker)
             hist = t.history(period="2d", interval="1d")
             if len(hist) >= 2:
                 prev = float(hist["Close"].iloc[-2])
@@ -238,18 +228,18 @@ def get_index_data(market_indices: dict):
                 results[name] = {"price": 0, "change": 0, "pct": 0}
     return results
 
-@st.cache_data(ttl=1801)
+@st.cache_data(ttl=1802)
 def get_stock_info_cached(ticker):
     try:
-        t = yf.Ticker(ticker, session=_yf_session)
+        t = yf.Ticker(ticker)
         return t.info
     except Exception:
         return {}
 
-@st.cache_data(ttl=1201)
+@st.cache_data(ttl=1202)
 def get_stock_data(ticker):
     try:
-        t = yf.Ticker(ticker, session=_yf_session)
+        t = yf.Ticker(ticker)
         
         info = {}
         try:
@@ -549,11 +539,11 @@ def extract_news_items(raw_news):
             continue
     return items
 
-@st.cache_data(ttl=1801)
+@st.cache_data(ttl=1802)
 def get_market_news(market="🇮🇳 India"):
     index_ticker = "^NSEI" if market == "🇮🇳 India" else "^GSPC"
     try:
-        t = yf.Ticker(index_ticker, session=_yf_session)
+        t = yf.Ticker(index_ticker)
         raw = t.news if hasattr(t, "news") and t.news else []
         news = extract_news_items(raw)[:6]
         if news:
@@ -565,7 +555,7 @@ def get_market_news(market="🇮🇳 India"):
     country = "in" if market == "🇮🇳 India" else "us"
     return _gnews_fetch(query, country=country)
 
-@st.cache_data(ttl=901)
+@st.cache_data(ttl=902)
 def get_ai_summary(ticker, company_name, info_json_str, tech_json_str, currency="₹"):
     try:
         from groq import Groq

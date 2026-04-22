@@ -1,6 +1,5 @@
 import streamlit as st
 import yfinance as yf
-from data_service import _yf_session
 
 def page_watchlist():
     st.markdown('<div class="section-title">📋 Your Watchlist</div>', unsafe_allow_html=True)
@@ -40,7 +39,7 @@ def page_watchlist():
             ticker = item["ticker"]
             name = item["name"]
             try:
-                t = yf.Ticker(ticker, session=_yf_session)
+                t = yf.Ticker(ticker)
                 hist = t.history(period="2d")
                 price, chg, pct = 0, 0, 0
                 if len(hist) >= 2:
