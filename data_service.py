@@ -8,6 +8,13 @@ import datetime
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# ── YFINANCE SESSION FIX FOR STREAMLIT CLOUD ──
+# Yahoo Finance blocks default cloud server IPs. A custom session with a user-agent helps bypass this.
+_yf_session = requests.Session()
+_yf_session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+})
+
 # ── DYNAMIC ASSETS ──
 @st.cache_data(ttl=86400)
 def load_ticker_list(market: str):
@@ -129,11 +136,11 @@ def _gnews_fetch(query: str, country: str = "in") -> list:
 def get_stock_data_safe(ticker, period="1y"):
     # Primary: yfinance
     try:
-        df = yf.download(ticker, period=period, progress=False, auto_adjust=True)
+        df = yf.download(ticker, period=period, progress=False, auto_adjust=True, session=_yf_session)
         if not df.empty:
             return df
         if ticker.endswith(".NS"):
-            df = yf.download(ticker.replace(".NS", ".BO"), period=period, progress=False, auto_adjust=True)
+            df = yf.download(ticker.replace(".NS", ".BO"), period=period, progress=False, auto_adjust=True, session=_yf_session)
             if not df.empty:
                 return df
     except Exception:
@@ -202,7 +209,7 @@ def get_index_data(market_indices: dict):
     for name, ticker in market_indices.items():
         fetched = False
         try:
-            t = yf.Ticker(ticker)
+            t = yf.Ticker(ticker, session=_yf_session)
             hist = t.history(period="2d", interval="1d")
             if len(hist) >= 2:
                 prev = float(hist["Close"].iloc[-2])
@@ -229,7 +236,7 @@ def get_index_data(market_indices: dict):
 @st.cache_data(ttl=1800)
 def get_stock_info_cached(ticker):
     try:
-        t = yf.Ticker(ticker)
+        t = yf.Ticker(ticker, session=_yf_session)
         return t.info
     except Exception:
         return {}
@@ -237,7 +244,7 @@ def get_stock_info_cached(ticker):
 @st.cache_data(ttl=1200)
 def get_stock_data(ticker):
     try:
-        t = yf.Ticker(ticker)
+        t = yf.Ticker(ticker, session=_yf_session)
         
         info = {}
         try:
@@ -541,7 +548,7 @@ def extract_news_items(raw_news):
 def get_market_news(market="🇮🇳 India"):
     index_ticker = "^NSEI" if market == "🇮🇳 India" else "^GSPC"
     try:
-        t = yf.Ticker(index_ticker)
+        t = yf.Ticker(index_ticker, session=_yf_session)
         raw = t.news if hasattr(t, "news") and t.news else []
         news = extract_news_items(raw)[:6]
         if news:
