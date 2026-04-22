@@ -19,7 +19,13 @@ Supports both **Indian (NSE/BSE)** and **US markets**.
 * Analyst sentiment & recommendation logic (rule-based)
 
 ---
+## 📊 Data Coverage
 
+Currently supports analysis for **500+ stocks** across Indian markets and **300 stcoks** for US markets.
+
+Designed with a scalable architecture to expand coverage to thousands of stocks in future versions.
+
+---
 ##  Tech Stack
 
 * Python
@@ -101,6 +107,6 @@ Always consult a certified financial advisor before investing.
 
 ---
 
-## 📌 Author
+##  Author
 
 Built as a real-world, production-style project focusing on scalability, data handling, and user-centric design.
