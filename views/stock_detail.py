@@ -1,13 +1,13 @@
 import streamlit as st
 import datetime
 from data_service import (get_stock_data, compute_technicals, generate_recommendation, 
-                          get_analyst_consensus, get_ai_summary, SUPER_INVESTORS, DEFAULT_INVESTORS)
+                          get_analyst_consensus, get_ai_summary, get_us_institutional_holders)
 from ui_components import (render_back_button, metric_chip, render_metric_row, 
-                           render_stock_header, apply_theme, candlestick_chart, 
+                           render_stock_header, candlestick_chart, 
                            volume_chart, rsi_chart, macd_chart, bollinger_chart, 
                            radar_chart, render_sebi_disclaimer)
 
-def safe_pct(value, max_val=80.0, min_val=-100.0):
+def safe_pct(value, max_val=2000.0, min_val=-1000.0):
     """Returns formatted % string or '—' for missing/unrealistic values."""
     if value is None: return "—"
     try:
@@ -15,7 +15,35 @@ def safe_pct(value, max_val=80.0, min_val=-100.0):
         if v != v: return "—"  # NaN check
         if v > max_val or v < min_val: return "—"
         return f"{v:.1f}%"
-    except: return "—"
+    except (TypeError, ValueError): return "—"
+
+def get_roe(info):
+    """Safely extracts ROE as percentage with fallback calculation."""
+    raw_roe = info.get("returnOnEquity")
+    if raw_roe is not None and isinstance(raw_roe, (int, float)) and raw_roe == raw_roe:
+        return float(raw_roe) * 100
+    eps = info.get("trailingEps")
+    bv = info.get("bookValue")
+    if eps and bv and isinstance(eps, (int, float)) and isinstance(bv, (int, float)) and bv > 0:
+        return (float(eps) / float(bv)) * 100
+    return None
+
+def get_dividend_yield(info):
+    """Safely extracts Dividend Yield as percentage."""
+    dy = info.get("dividendYield")
+    if dy is not None and isinstance(dy, (int, float)) and dy == dy:
+        tdy = info.get("trailingAnnualDividendYield")
+        if dy < 0.2 and tdy is not None and isinstance(tdy, (int, float)) and abs(dy - tdy) < 0.001:
+            return float(dy) * 100
+        return float(dy)
+    tdy = info.get("trailingAnnualDividendYield")
+    if tdy is not None and isinstance(tdy, (int, float)) and tdy == tdy and tdy > 0:
+        return float(tdy) * 100
+    dr = info.get("dividendRate")
+    price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+    if dr and price and isinstance(dr, (int, float)) and isinstance(price, (int, float)) and price > 0:
+        return (float(dr) / float(price)) * 100
+    return 0.0
 
 def render_fundamentals(ticker, info):
     c1, c2 = st.columns([3, 1])
@@ -43,10 +71,10 @@ def render_fundamentals(ticker, info):
     pe = info.get("trailingPE") or info.get("forwardPE") or 0
     if isinstance(pe, str): pe = 0
     pb = info.get("priceToBook") or 0
-    roe = (info.get("returnOnEquity") or 0)*100
+    roe = get_roe(info)
     de = info.get("debtToEquity") or 0
     if de > 100: de = de/100
-    div_yield = (info.get("dividendYield") or 0)*100
+    div_yield = get_dividend_yield(info)
     eps = info.get("trailingEps") or 0
     sales_g = (info.get("revenueGrowth") or 0)*100
     profit_g = (info.get("earningsGrowth") or 0)*100
@@ -67,7 +95,7 @@ def render_fundamentals(ticker, info):
             val = float(v)
             if val != val or val < 0 or val > 999: return "—"
             return val
-        except: return "—"
+        except (TypeError, ValueError): return "—"
 
     safe_pe = safe_ratio(pe)
     safe_pb = safe_ratio(pb)
@@ -80,9 +108,9 @@ def render_fundamentals(ticker, info):
     chips = [
         metric_chip("P/E Ratio", pe_str, "green" if isinstance(safe_pe, float) and 0<safe_pe<25 else "red" if isinstance(safe_pe, float) and safe_pe>40 else ""),
         metric_chip("P/B Ratio", pb_str, "green" if isinstance(safe_pb, float) and 0<safe_pb<3 else "red" if isinstance(safe_pb, float) and safe_pb>6 else ""),
-        metric_chip("ROE", safe_pct(roe, max_val=200), pc(roe, 15)),
+        metric_chip("ROE", safe_pct(roe, max_val=2000.0), pc(roe, 15) if roe is not None else ""),
         metric_chip("Debt/Equity", de_str, "green" if isinstance(safe_de, float) and safe_de<0.5 else "red" if isinstance(safe_de, float) and safe_de>2 else ""),
-        metric_chip("Div Yield", safe_pct(div_yield, max_val=20, min_val=0), "green" if div_yield>1 else ""),
+        metric_chip("Div Yield", safe_pct(div_yield, max_val=100.0, min_val=0.0), "green" if div_yield>1 else ""),
         metric_chip("EPS (TTM)", f"{_cur}{eps:.2f}" if eps else "N/A", "green" if eps>0 else "red"),
         metric_chip("Sales Growth", safe_pct(sales_g, max_val=500), pc(sales_g, 10)),
         metric_chip("Profit Growth", safe_pct(profit_g, max_val=500), pc(profit_g, 10)),
@@ -99,6 +127,7 @@ def render_technicals(ta, hist):
         return
     st.markdown('<div class="section-title">📉 Technical Analysis</div>', unsafe_allow_html=True)
     _cur = st.session_state.get("_currency", "₹")
+    rsi_val = None
     try:
         rsi_val = float(ta["rsi"].iloc[-1])
         macd_val = float(ta["macd"].iloc[-1])
@@ -121,7 +150,7 @@ def render_technicals(ta, hist):
             metric_chip("Price Action",breaking,"green" if "Out" in breaking else ("red" if "Support" in breaking else "gold")),
         ]
         render_metric_row(chips)
-    except Exception: pass
+    except (KeyError, IndexError, TypeError, ValueError): pass
 
     tab1,tab2,tab3,tab4 = st.tabs(["🕯️ Candles","📈 RSI","📊 MACD","🎯 Bollinger"])
     with tab1:
@@ -129,9 +158,12 @@ def render_technicals(ta, hist):
         st.plotly_chart(volume_chart(hist),use_container_width=True,config={"displayModeBar":False})
     with tab2:
         st.plotly_chart(rsi_chart(ta["rsi"].dropna()),use_container_width=True,config={"displayModeBar":False})
-        if rsi_val<30: st.success("🟢 RSI below 30 — **Oversold**. Potential buying opportunity!")
-        elif rsi_val>70: st.error("🔴 RSI above 70 — **Overbought**. Be cautious!")
-        else: st.info(f"🟡 RSI at {rsi_val:.0f} — Neutral zone.")
+        if rsi_val is not None:
+            if rsi_val<30: st.success("🟢 RSI below 30 — **Oversold**. Potential buying opportunity!")
+            elif rsi_val>70: st.error("🔴 RSI above 70 — **Overbought**. Be cautious!")
+            else: st.info(f"🟡 RSI at {rsi_val:.0f} — Neutral zone.")
+        else:
+            st.info("🟡 RSI data unavailable for neutral zone check.")
     with tab3:
         st.plotly_chart(macd_chart(ta["macd"].dropna(),ta["signal"].dropna(),ta["macd_hist"].dropna()),use_container_width=True,config={"displayModeBar":False})
     with tab4:
@@ -168,75 +200,88 @@ def render_analyst_consensus(recs):
     </div>""", unsafe_allow_html=True)
 
 def render_news(news_list):
-    st.markdown('<div class="section-title">📰 Recent News</div>', unsafe_allow_html=True)
     if not news_list:
+        st.markdown('<div class="section-title">Recent News</div>', unsafe_allow_html=True)
         st.markdown('<div class="news-card"><div class="news-title">No recent news available.</div></div>', unsafe_allow_html=True)
         return
+        
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now_utc - datetime.timedelta(days=45)
+    
+    has_older = any(
+        item.get("dt") is not None and item.get("dt") < cutoff
+        for item in news_list
+    )
+    section_title = "News & Archives" if has_older else "Recent News"
+    st.markdown(f'<div class="section-title">{section_title}</div>', unsafe_allow_html=True)
+    
     for item in news_list[:5]:
         title = item.get("title", "No title")
         publisher = item.get("publisher", "")
         link = item.get("link", "#")
+        dt = item.get("dt")
         pub_time = item.get("time", "")
+        
         time_str = ""
-        if pub_time:
-            try:
-                if isinstance(pub_time, (int, float)):
-                    time_str = datetime.datetime.fromtimestamp(int(pub_time)).strftime("%d %b %Y, %I:%M %p")
-                else:
-                    time_str = str(pub_time)[:25]
-            except:
-                time_str = str(pub_time)[:25]
-        st.markdown(f'<a href="{link}" target="_blank" style="text-decoration:none"><div class="news-card"><div class="news-title">{title}</div><div class="news-meta">{publisher} · {time_str}</div></div></a>', unsafe_allow_html=True)
+        if isinstance(dt, datetime.datetime):
+            time_str = dt.strftime("%d %b %Y, %I:%M %p")
+        elif pub_time:
+            time_str = str(pub_time)[:25]
+            
+        meta_str = f"{publisher} · {time_str}" if publisher and time_str else (publisher or time_str)
+        st.markdown(f'<a href="{link}" target="_blank" style="text-decoration:none"><div class="news-card"><div class="news-title">{title}</div><div class="news-meta">{meta_str}</div></div></a>', unsafe_allow_html=True)
 
 def render_super_investors(ticker):
-    st.markdown('<div class="section-title">👑 Super Investors</div>', unsafe_allow_html=True)
-    investors = SUPER_INVESTORS.get(ticker, DEFAULT_INVESTORS)
-    for inv in investors:
+    st.markdown('<div class="section-title">Top Institutional Holders (US Equities)</div>', unsafe_allow_html=True)
+    holders = get_us_institutional_holders(ticker)
+    if not holders:
+        st.markdown('<div class="ss-card" style="text-align:center;padding:20px;color:#9E9E9E">No institutional holder data available for this ticker.</div>', unsafe_allow_html=True)
+        return
+    for inv in holders:
         st.markdown(f"""<div class="investor-card"><div><div class="investor-name">{inv['name']}</div><div class="investor-type">{inv['type']}</div></div>
           <div style="text-align:right"><div class="investor-holding">{inv['holding']}</div><div style="font-size:11px;color:#616161">{inv.get('value','')}</div></div></div>""", unsafe_allow_html=True)
 
 def render_recommendation(info, ta):
-    verdict,cls,icon,reasons = generate_recommendation(info, ta)
-    st.markdown(f"""<div class="rec-banner {cls}"><div class="rec-icon">{icon}</div><div>
-      <div class="rec-label {cls}">StockSense Says: {verdict}</div>
+    verdict, cls, icon, reasons = generate_recommendation(info, ta)
+    st.markdown(f"""<div class="rec-banner {cls}"><div>
+      <div class="rec-label {cls}">StockSense Verdict: {verdict}</div>
       <div class="rec-reason">Based on fundamental + technical analysis</div></div></div>""", unsafe_allow_html=True)
-    with st.expander("📋 Why this recommendation?"):
+    with st.expander("Why this recommendation?"):
         for r in reasons: st.markdown(f"- {r}")
 
 def render_simulator(info):
-    st.markdown('<div class="section-title">💰 What-If Investment Simulator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">What-If Investment Simulator</div>', unsafe_allow_html=True)
     price = info.get("currentPrice") or info.get("regularMarketPrice") or 100
-    c1,c2,c3 = st.columns(3)
+    c1, c2, c3 = st.columns(3)
     _cur = st.session_state.get("_currency", "₹")
-    with c1: invest = st.number_input(f"Amount ({_cur})",min_value=100,max_value=1000000,value=10000,step=500,key="sim_amt")
-    with c2: growth = st.slider("Expected Return %",-30,50,12,key="sim_g")
-    with c3: years = st.slider("Years",1,20,3,key="sim_y")
-    shares = invest/price if price>0 else 0
-    future_price = price*((1+growth/100)**years)
-    future_value = shares*future_price
-    profit = future_value-invest
-    pct_gain = (profit/invest*100) if invest>0 else 0
-    color = "#00D09C" if profit>=0 else "#EB5B3C"
+    with c1: invest = st.number_input(f"Amount ({_cur})", min_value=100, max_value=1000000, value=10000, step=500, key="sim_amt")
+    with c2: growth = st.slider("Expected Return %", -30, 50, 12, key="sim_g")
+    with c3: years = st.slider("Years", 1, 20, 3, key="sim_y")
+    shares = invest / price if price > 0 else 0
+    future_price = price * ((1 + growth / 100) ** years)
+    future_value = shares * future_price
+    profit = future_value - invest
+    pct_gain = (profit / invest * 100) if invest > 0 else 0
+    color = "#00D09C" if profit >= 0 else "#EB5B3C"
     st.markdown(f"""<div class="sim-result" style="margin-top:12px">
       <div style="color:#9E9E9E;font-size:13px;margin-bottom:4px">{shares:.2f} shares × {_cur}{future_price:,.2f} in {years}yr</div>
       <div class="sim-amount" style="color:{color}">{_cur}{future_value:,.0f}</div>
-      <div style="color:{color};font-size:1.1rem;font-weight:600">{'📈' if profit>=0 else '📉'} {'+' if profit>=0 else ''}{profit:,.0f} ({'+' if pct_gain>=0 else ''}{pct_gain:.1f}%)</div>
-      <div style="color:#616161;font-size:11px;margin-top:8px">⚠️ Simulation only. Not financial advice.</div></div>""", unsafe_allow_html=True)
+      <div style="color:{color};font-size:1.1rem;font-weight:600">{'+' if profit>=0 else ''}{profit:,.0f} ({'+' if pct_gain>=0 else ''}{pct_gain:.1f}%)</div>
+      <div style="color:#616161;font-size:11px;margin-top:8px">Simulation model for educational purposes.</div></div>""", unsafe_allow_html=True)
 
 def render_ai_tab(ticker, info, ta):
     if not st.session_state.logged_in:
         st.markdown("""<div class="guest-lock">
-          <div class="lock-icon">🔒</div>
           <div class="lock-title">AI Analysis — Login Required</div>
           <div class="lock-desc">Sign in to unlock AI-powered stock analysis powered by Llama 3.3</div>
         </div>""", unsafe_allow_html=True)
-        if st.button("🔐 Login to Unlock", key="ai_login_btn", use_container_width=True):
+        if st.button("Login to Unlock", key="ai_login_btn", type="primary", use_container_width=True):
             st.session_state.prev_page = st.session_state.page
             st.session_state.page = "login"
             st.rerun()
         return
 
-    st.markdown('<div class="ai-badge">🤖 Powered by Llama 3.3 · Groq</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ai-badge">Powered by Llama 3.3 · Groq</div>', unsafe_allow_html=True)
     company_name = info.get("longName") or info.get("shortName") or ticker
     price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
     _cur = st.session_state.get("_currency", "₹")
@@ -244,7 +289,7 @@ def render_ai_tab(ticker, info, ta):
     info_summary = {
         "price": f"{price:,.2f}", "pe": f"{info.get('trailingPE') or info.get('forwardPE') or 'N/A'}",
         "roe": f"{(info.get('returnOnEquity') or 0)*100:.1f}",
-        "de": f"{(info.get('debtToEquity') or 0)/100 if (info.get('debtToEquity') or 0)>10 else (info.get('debtToEquity') or 0):.2f}",
+        "de": f"{(info.get('debtToEquity') or 0)/100 if (info.get('debtToEquity') or 0)>10 else (i.get('debtToEquity') or 0):.2f}" if "i" in locals() else f"{(info.get('debtToEquity') or 0)/100 if (info.get('debtToEquity') or 0)>10 else (info.get('debtToEquity') or 0):.2f}",
         "sales_g": f"{(info.get('revenueGrowth') or 0)*100:.1f}",
         "profit_g": f"{(info.get('earningsGrowth') or 0)*100:.1f}",
         "div_yield": f"{(info.get('dividendYield') or 0)*100:.2f}",
@@ -261,41 +306,60 @@ def render_ai_tab(ticker, info, ta):
             sig_val = float(ta["signal"].iloc[-1])
             tech_summary["rsi"] = f"{rsi_val:.1f}"
             tech_summary["macd_signal"] = "Bullish" if macd_val > sig_val else "Bearish"
-        except:
+        except (KeyError, IndexError, TypeError, ValueError):
             pass
     info_str = str(info_summary)
     tech_str = str(tech_summary)
-    with st.spinner("🤖 AI is analyzing this stock..."):
+    with st.spinner("AI is analyzing this stock..."):
         summary = get_ai_summary(ticker, company_name, info_str, tech_str, _cur)
     st.markdown(f'<div class="ai-card">{summary}</div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:#616161;font-size:11px;margin-top:8px">⚠️ AI analysis is for educational purposes only. Not financial advice. Always do your own research.</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#616161;font-size:11px;margin-top:8px">AI analysis is for educational purposes only. Always do your own research.</div>', unsafe_allow_html=True)
 
 def render_stock_detail(ticker, show_news=False, show_back=True):
     with st.spinner("Fetching live data..."):
         data = get_stock_data(ticker)
     
-    # Error handling for invalid ticker
     if data is None or not data.get("info"):
-        st.error(f"⚠️ Stock not found or data unavailable for **{ticker}**.")
-        st.info("Try checking the selection, or search by company name instead of ticker.")
+        st.warning(f"Stock data unavailable for **{ticker}**. The ticker may be delisted or invalid.")
+        st.info("Try selecting a stock from the dropdown list or search by company name.")
         return
         
-    info=data["info"];hist_1y=data["hist_1y"];news=data["news"];recs=data["recs"]
+    info = data["info"]; hist_1y = data["hist_1y"]; news = data["news"]; recs = data["recs"]
     ta = compute_technicals(hist_1y)
+    
     if show_back: render_back_button()
     render_stock_header(info)
 
-    tab_fund,tab_tech,tab_ai,tab_radar,tab_analyst,tab_investors,tab_sim = st.tabs(
-        ["📊 Fundamentals","📉 Technicals","🤖 AI Summary","🎯 Scorecard","🗣️ Analysts","👑 Super Investors","💰 Simulator"])
-    with tab_fund:
-        render_fundamentals(ticker, info)
-        if show_news: render_news(news)
-    with tab_tech: render_technicals(ta, hist_1y)
-    with tab_ai: render_ai_tab(ticker, info, ta)
-    with tab_radar:
-        c1,c2 = st.columns([1,1])
-        with c1: st.plotly_chart(radar_chart(info),use_container_width=True,config={"displayModeBar":False})
-        with c2: render_recommendation(info,ta); render_sebi_disclaimer()
-    with tab_analyst: render_analyst_consensus(recs)
-    with tab_investors: render_super_investors(ticker)
-    with tab_sim: render_simulator(info)
+    is_indian = ticker.endswith(".NS") or ticker.endswith(".BO") or "India" in st.session_state.get("market_mode", "India")
+
+    if is_indian:
+        tab_fund, tab_tech, tab_ai, tab_radar, tab_analyst, tab_sim = st.tabs(
+            [":material/account_balance: Fundamentals", ":material/show_chart: Technicals", ":material/smart_toy: AI Summary", ":material/radar: Scorecard", ":material/groups: Analysts", ":material/calculate: Simulator"]
+        )
+        with tab_fund:
+            render_fundamentals(ticker, info)
+            if show_news: render_news(news)
+        with tab_tech: render_technicals(ta, hist_1y)
+        with tab_ai: render_ai_tab(ticker, info, ta)
+        with tab_radar:
+            c1, c2 = st.columns([1, 1])
+            with c1: st.plotly_chart(radar_chart(info), use_container_width=True, config={"displayModeBar": False})
+            with c2: render_recommendation(info, ta); render_sebi_disclaimer()
+        with tab_analyst: render_analyst_consensus(recs)
+        with tab_sim: render_simulator(info)
+    else:
+        tab_fund, tab_tech, tab_ai, tab_radar, tab_analyst, tab_investors, tab_sim = st.tabs(
+            [":material/account_balance: Fundamentals", ":material/show_chart: Technicals", ":material/smart_toy: AI Summary", ":material/radar: Scorecard", ":material/groups: Analysts", ":material/workspace_premium: Institutional Holders", ":material/calculate: Simulator"]
+        )
+        with tab_fund:
+            render_fundamentals(ticker, info)
+            if show_news: render_news(news)
+        with tab_tech: render_technicals(ta, hist_1y)
+        with tab_ai: render_ai_tab(ticker, info, ta)
+        with tab_radar:
+            c1, c2 = st.columns([1, 1])
+            with c1: st.plotly_chart(radar_chart(info), use_container_width=True, config={"displayModeBar": False})
+            with c2: render_recommendation(info, ta); render_sebi_disclaimer()
+        with tab_analyst: render_analyst_consensus(recs)
+        with tab_investors: render_super_investors(ticker)
+        with tab_sim: render_simulator(info)

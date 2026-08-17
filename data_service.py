@@ -3,10 +3,10 @@ import os
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import time
-import datetime
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Removed custom session as it interferes with yfinance's internal crumb management.
 
@@ -14,9 +14,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 @st.cache_data(ttl=86402)
 def load_ticker_list(market: str):
     filename = "tickers_india.json" if market == "🇮🇳 India" else "tickers_us.json"
-    if not os.path.exists(filename):
+    filepath = os.path.join(BASE_DIR, filename)
+    if not os.path.exists(filepath):
         return []
-    with open(filename, "r", encoding="utf-8") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         return json.load(f)
 
 @st.cache_data(ttl=86402)
@@ -72,7 +73,7 @@ def _nsepython_quote(ticker: str) -> dict:
 def _alpha_vantage_history(ticker: str) -> pd.DataFrame:
     """OHLCV history fallback. Indian stocks use BSE format. Returns DataFrame or empty."""
     api_key = st.secrets.get("ALPHA_VANTAGE_KEY", "")
-    if not api_key:
+    if not api_key or api_key == "your-alpha-vantage-key-here":
         return pd.DataFrame()
     av_ticker = _to_av_ticker(ticker)
     try:
@@ -107,7 +108,7 @@ def _alpha_vantage_history(ticker: str) -> pd.DataFrame:
 def _gnews_fetch(query: str, country: str = "in") -> list:
     """News fallback. Covers ET, NDTV Business, Moneycontrol etc. Returns list or []."""
     api_key = st.secrets.get("GNEWS_KEY", "")
-    if not api_key:
+    if not api_key or api_key == "your-gnews-key-here":
         return []
     try:
         r = requests.get(
@@ -126,30 +127,6 @@ def _gnews_fetch(query: str, country: str = "in") -> list:
         ]
     except Exception:
         return []
-
-@st.cache_data(ttl=302)
-def get_stock_data_safe(ticker, period="1y"):
-    # Primary: yfinance
-    try:
-        df = yf.download(ticker, period=period, progress=False, auto_adjust=True)
-        if not df.empty:
-            return df
-        if ticker.endswith(".NS"):
-            df = yf.download(ticker.replace(".NS", ".BO"), period=period, progress=False, auto_adjust=True)
-            if not df.empty:
-                return df
-    except Exception:
-        pass
-    # Fallback 1: NSEPython (Indian only, gets latest quote as single row)
-    q = _nsepython_quote(ticker)
-    if q.get("c", 0) > 0:
-        # NSEPython gives live quote only, not history — return empty to let caller handle
-        pass
-    # Fallback 2: Alpha Vantage history
-    df = _alpha_vantage_history(ticker)
-    if not df.empty:
-        return df
-    return pd.DataFrame()
 
 # ── INDICES FOR MARKET TOP BAR ──
 INDICES_INDIA = {"SENSEX": "^BSESN", "NIFTY 50": "^NSEI", "BANK NIFTY": "^NSEBANK"}
@@ -173,7 +150,7 @@ COMPETITIVE_ADVANTAGES = {
     "HDFCBANK.NS":"Network Effect","ICICIBANK.NS":"Network Effect","SBIN.NS":"Network Effect",
     "ZOMATO.NS":"Network Effect","NAUKRI.NS":"Network Effect","POLICYBZR.NS":"Network Effect",
     "RELIANCE.NS":"Conglomerate Moat","ADANIENT.NS":"Conglomerate Moat",
-    "NTPC.NS":"Cost Advantage","POWERGRID.NS":"Cost Advantage","COALINDIA.NS":"Cost Advantage",
+    "NTPC.NS":"Cost Advantage","POWERGRID.NS":"Cost Advantage",
     "ULTRACEMCO.NS":"Scale Advantage","LT.NS":"Scale Advantage","JSWSTEEL.NS":"Scale Advantage",
     "BAJFINANCE.NS":"Distribution Moat","BAJAJFINSV.NS":"Distribution Moat",
     "SUNPHARMA.NS":"R&D Moat","DRREDDY.NS":"R&D Moat","DIVISLAB.NS":"R&D Moat",
@@ -181,21 +158,48 @@ COMPETITIVE_ADVANTAGES = {
     "AAPL":"Brand Power", "MSFT":"Switching Cost", "GOOGL":"Network Effect", "NVDA":"Monopoly"
 }
 
-SUPER_INVESTORS = {
-    "RELIANCE.NS":[{"name":"LIC of India","type":"Insurance","holding":"6.74%","value":"₹94,200 Cr"},{"name":"SBI Mutual Fund","type":"Mutual Fund","holding":"2.11%","value":"₹29,500 Cr"}],
-    "TCS.NS":[{"name":"Tata Sons","type":"Promoter Group","holding":"72.30%","value":"₹9,89,000 Cr"},{"name":"LIC of India","type":"Insurance","holding":"3.92%","value":"₹53,700 Cr"}],
-    "HDFCBANK.NS":[{"name":"HDFC Ltd (merged)","type":"Promoter","holding":"26.00%","value":"₹3,12,000 Cr"},{"name":"Mirae Asset MF","type":"Mutual Fund","holding":"2.86%","value":"₹34,300 Cr"}],
-    "INFY.NS":[{"name":"NR Narayana Murthy & Family","type":"Promoter","holding":"14.48%","value":"₹74,200 Cr"},{"name":"LIC of India","type":"Insurance","holding":"6.21%","value":"₹31,900 Cr"}],
-    "ICICIBANK.NS":[{"name":"LIC of India","type":"Insurance","holding":"6.29%","value":"₹57,400 Cr"},{"name":"Govt of Singapore","type":"FII / Sovereign","holding":"4.01%","value":"₹36,600 Cr"}],
-    "SBIN.NS":[{"name":"Govt of India","type":"Promoter","holding":"57.51%","value":"₹3,11,000 Cr"},{"name":"LIC of India","type":"Insurance","holding":"9.20%","value":"₹49,800 Cr"}],
-    "AAPL":[{"name":"Vanguard Group","type":"Mutual Fund","holding":"8.3%","value":"$230B"}],
-    "MSFT":[{"name":"BlackRock","type":"Mutual Fund","holding":"7.1%","value":"$205B"}]
-}
-DEFAULT_INVESTORS = [
-    {"name":"LIC of India (or equivalent inst.)","type":"Institutional","holding":"~2–7%","value":"Varies"},
-    {"name":"Mutual Funds","type":"Mutual Fund","holding":"~1–3%","value":"Large Cap"},
-    {"name":"Govt of Singapore / Sovereign","type":"Sovereign Wealth","holding":"~0.5–2%","value":"FII"},
-]
+import datetime
+
+SUPER_INVESTORS = {}  # Deprecated stub for backwards compatibility
+DEFAULT_INVESTORS = []
+
+@st.cache_data(ttl=86400)
+def get_us_institutional_holders(ticker: str) -> list:
+    """Fetches real top institutional holders for US tickers from yfinance."""
+    if not ticker or ticker.endswith(".NS") or ticker.endswith(".BO"):
+        return []
+    holders = []
+    try:
+        t = yf.Ticker(ticker)
+        inst = t.institutional_holders
+        if inst is not None and hasattr(inst, "empty") and not inst.empty:
+            for _, row in inst.head(6).iterrows():
+                h_name = str(row.get("Holder", "Unknown"))
+                pct = row.get("pctHeld")
+                shares = row.get("Shares")
+                val = row.get("Value")
+                
+                if pct is not None and isinstance(pct, (int, float)) and pct == pct and pct > 0:
+                    h_str = f"{pct * 100:.2f}%"
+                elif shares and isinstance(shares, (int, float)) and shares == shares:
+                    h_str = f"{shares:,.0f} shares"
+                else:
+                    h_str = "Institutional"
+                    
+                if val and isinstance(val, (int, float)) and val == val and val > 0:
+                    v_str = f"${val/1e9:.2f}B" if val >= 1e9 else f"${val/1e6:.1f}M"
+                else:
+                    v_str = ""
+                    
+                holders.append({
+                    "name": h_name,
+                    "type": "Institutional Holder",
+                    "holding": h_str,
+                    "value": v_str
+                })
+    except Exception:
+        pass
+    return holders
 
 # ── DATA FUNCTIONS ──
 @st.cache_data(ttl=902)
@@ -372,14 +376,35 @@ def screen_stocks_with_progress(stocks_dict, max_pe=25, max_de=1.0, min_roe=10,
             if isinstance(pe, str): pe = 999
             
             de = info.get("debtToEquity", 999) or 999
-            if de > 100: de = de / 100
+            if 5 < de < 999: de = de / 100
             
-            roe = (info.get("returnOnEquity") or 0) * 100
+            raw_roe = info.get("returnOnEquity")
+            if raw_roe is not None and isinstance(raw_roe, (int, float)) and raw_roe == raw_roe:
+                roe = float(raw_roe) * 100
+            elif info.get("trailingEps") and info.get("bookValue") and info.get("bookValue") > 0:
+                roe = (float(info.get("trailingEps")) / float(info.get("bookValue"))) * 100
+            else:
+                roe = 0.0
+
             promoter = info.get("heldPercentInsiders", 0) * 100
             market_cap = info.get("marketCap", 0)
             sales_growth = (info.get("revenueGrowth") or 0) * 100
             profit_growth = (info.get("earningsGrowth") or 0) * 100
-            div_yield = (info.get("dividendYield") or 0) * 100
+
+            raw_dy = info.get("dividendYield")
+            if raw_dy is not None and isinstance(raw_dy, (int, float)) and raw_dy == raw_dy:
+                tdy = info.get("trailingAnnualDividendYield")
+                if raw_dy < 0.2 and tdy is not None and isinstance(tdy, (int, float)) and abs(raw_dy - tdy) < 0.001:
+                    div_yield = float(raw_dy) * 100
+                else:
+                    div_yield = float(raw_dy)
+            elif info.get("trailingAnnualDividendYield"):
+                div_yield = float(info.get("trailingAnnualDividendYield")) * 100
+            elif info.get("dividendRate") and price and price > 0:
+                div_yield = (float(info.get("dividendRate")) / float(price)) * 100
+            else:
+                div_yield = 0.0
+
             pb = info.get("priceToBook") or 0
             eps = info.get("trailingEps") or 0
             npm = (info.get("profitMargins") or 0) * 100
@@ -462,13 +487,32 @@ def generate_recommendation(info, technicals):
     reasons = []
     pe = info.get("trailingPE") or info.get("forwardPE") or 0
     if isinstance(pe, str): pe = 0
-    roe = (info.get("returnOnEquity") or 0) * 100
+    
+    raw_roe = info.get("returnOnEquity")
+    if raw_roe is not None and isinstance(raw_roe, (int, float)) and raw_roe == raw_roe:
+        roe = float(raw_roe) * 100
+    elif info.get("trailingEps") and info.get("bookValue") and info.get("bookValue") > 0:
+        roe = (float(info.get("trailingEps")) / float(info.get("bookValue"))) * 100
+    else:
+        roe = 0.0
+
     de = (info.get("debtToEquity") or 0)
-    if de > 100: de = de / 100
+    if de > 5: de = de / 100
     sales_growth = (info.get("revenueGrowth") or 0) * 100
     profit_growth = (info.get("earningsGrowth") or 0) * 100
     promoter = (info.get("heldPercentInsiders") or 0) * 100
-    div_yield = (info.get("dividendYield") or 0) * 100
+    
+    raw_dy = info.get("dividendYield")
+    if raw_dy is not None and isinstance(raw_dy, (int, float)) and raw_dy == raw_dy:
+        tdy = info.get("trailingAnnualDividendYield")
+        if raw_dy < 0.2 and tdy is not None and isinstance(tdy, (int, float)) and abs(raw_dy - tdy) < 0.001:
+            div_yield = float(raw_dy) * 100
+        else:
+            div_yield = float(raw_dy)
+    elif info.get("trailingAnnualDividendYield"):
+        div_yield = float(info.get("trailingAnnualDividendYield")) * 100
+    else:
+        div_yield = 0.0
     npm = (info.get("profitMargins") or 0) * 100
 
     if 0 < pe < 20: score += 2; reasons.append("✅ Low P/E — may be undervalued")
@@ -494,10 +538,10 @@ def generate_recommendation(info, technicals):
             sig_val = float(technicals["signal"].iloc[-1])
             if macd_val > sig_val: score += 1; reasons.append("✅ MACD bullish crossover")
             else: reasons.append("⚠️ MACD below signal")
-        except: pass
+        except (KeyError, IndexError, TypeError, ValueError): pass
 
     if score >= 5: return "BUY","buy","🟢",reasons
-    elif score >= 1: return "HOLD","hold","🟡",reasons
+    elif score >= 0: return "HOLD","hold","🟡",reasons
     else: return "SELL","sell","🔴",reasons
 
 
@@ -511,33 +555,85 @@ def get_analyst_consensus(recs):
             total = int(row.get("strongBuy",0)+row.get("buy",0)+row.get("hold",0)+row.get("sell",0)+row.get("strongSell",0))
             if total == 0: return None
             return {"strongBuy":int(row.get("strongBuy",0)),"buy":int(row.get("buy",0)),"hold":int(row.get("hold",0)),"sell":int(row.get("sell",0)),"strongSell":int(row.get("strongSell",0)),"total":total}
-    except: pass
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError): pass
     return None
 
 
+def _parse_news_datetime(val):
+    """Safely parses news publication timestamp (ISO string or UNIX integer) into UTC datetime."""
+    if not val:
+        return None
+    if isinstance(val, (int, float)):
+        try:
+            return datetime.datetime.fromtimestamp(val, tz=datetime.timezone.utc)
+        except Exception:
+            return None
+    if isinstance(val, str):
+        val = val.strip()
+        try:
+            val_clean = val.replace("Z", "+00:00")
+            dt = datetime.datetime.fromisoformat(val_clean)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            return dt
+        except Exception:
+            pass
+        try:
+            ts = float(val)
+            return datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+        except Exception:
+            pass
+    return None
+
 def extract_news_items(raw_news):
-    items = []
-    if not raw_news: return items
-    for item in raw_news[:6]:
+    if not raw_news:
+        return []
+    
+    parsed = []
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now_utc - datetime.timedelta(days=45)
+    
+    for item in raw_news:
         try:
             if isinstance(item, dict) and "content" in item:
                 c = item["content"]
-                items.append({
+                raw_time = c.get("pubDate", "")
+                dt = _parse_news_datetime(raw_time)
+                parsed.append({
                     "title": c.get("title", "No title"),
                     "publisher": c.get("provider", {}).get("displayName", "") if isinstance(c.get("provider"), dict) else "",
                     "link": c.get("canonicalUrl", {}).get("url", "#") if isinstance(c.get("canonicalUrl"), dict) else "#",
-                    "time": c.get("pubDate", ""),
+                    "time": raw_time,
+                    "dt": dt
                 })
             elif isinstance(item, dict):
-                items.append({
+                raw_time = item.get("providerPublishTime") or item.get("time", "")
+                dt = _parse_news_datetime(raw_time)
+                parsed.append({
                     "title": item.get("title", "No title"),
                     "publisher": item.get("publisher", ""),
                     "link": item.get("link", "#"),
-                    "time": item.get("providerPublishTime", ""),
+                    "time": raw_time,
+                    "dt": dt
                 })
         except Exception:
             continue
-    return items
+            
+    # Sort descending by publish date (items with valid dt first)
+    parsed.sort(
+        key=lambda x: x["dt"] if x["dt"] is not None else datetime.datetime.min.replace(tzinfo=datetime.timezone.utc),
+        reverse=True
+    )
+    
+    # Filter items within 45-day window
+    recent = [item for item in parsed if item["dt"] is not None and item["dt"] >= cutoff]
+    
+    if len(recent) >= 3:
+        return recent[:6]
+    elif parsed:
+        # Fallback to sorted list if fewer than 3 recent items exist
+        return parsed[:6]
+    return []
 
 @st.cache_data(ttl=1802)
 def get_market_news(market="🇮🇳 India"):
@@ -564,9 +660,9 @@ def get_ai_summary(ticker, company_name, info_json_str, tech_json_str, currency=
         
     try:
         api_key = st.secrets.get("GROQ_API_KEY", "")
-        if not api_key:
+        if not api_key or api_key == "your-groq-api-key-here":
             return "⚠️ No API key configured. Add GROQ_API_KEY to .streamlit/secrets.toml"
-        client = Groq(api_key=api_key)
+        client = Groq(api_key=api_key, timeout=15.0)
         prompt = f"""You are a concise stock market analyst. Analyze {company_name} ({ticker}).
 
 Key data: {info_json_str}

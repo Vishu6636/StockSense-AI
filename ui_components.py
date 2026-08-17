@@ -2,9 +2,10 @@ import streamlit as st
 import base64
 import os
 import plotly.graph_objects as go
-import plotly.express as px
 from data_service import get_index_data, get_market_indices, search_tickers
 import streamlit.components.v1 as components
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── LOGO & CSS ──
 LOGO_SVG = '''<svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -82,10 +83,10 @@ def inject_css():
     .info-i:hover .info-tip{display:block}
 
     /* Buttons */
-    .stButton>button,button[data-testid="baseButton-primary"]{background:var(--accent-green)!important;color:#0D0D0D!important;font-weight:700!important;border:none!important;border-radius:8px!important;padding:8px 8px!important;font-size:13px!important;transition:all .2s ease!important;font-family:'Inter',sans-serif!important;white-space:nowrap!important;display:flex!important;align-items:center!important;justify-content:center!important;height:44px!important;text-overflow:ellipsis!important;overflow:hidden!important}
-    .stButton>button:hover,button[data-testid="baseButton-primary"]:hover{filter:brightness(1.1)!important;transform:translateY(-1px)!important;box-shadow:0 4px 12px rgba(0,208,156,.3)!important}
-    button[data-testid="baseButton-secondary"]{background:var(--bg-card2)!important;color:var(--text-secondary)!important;font-weight:600!important;border:1px solid var(--border)!important;border-radius:8px!important;padding:8px 8px!important;transition:all .2s ease!important;font-family:'Inter',sans-serif!important;white-space:nowrap!important;display:flex!important;align-items:center!important;justify-content:center!important;height:44px!important;text-overflow:ellipsis!important;overflow:hidden!important}
-    button[data-testid="baseButton-secondary"]:hover{border-color:var(--accent-green)!important;color:var(--accent-green)!important;background:rgba(0,208,156,.08)!important}
+    button[data-testid="baseButton-primary"]{background:var(--accent-green)!important;color:#0D0D0D!important;font-weight:700!important;border:none!important;border-radius:8px!important;padding:8px 8px!important;font-size:13px!important;transition:all .2s ease!important;font-family:'Inter',sans-serif!important;white-space:nowrap!important;display:flex!important;align-items:center!important;justify-content:center!important;height:44px!important;text-overflow:ellipsis!important;overflow:hidden!important}
+    button[data-testid="baseButton-primary"]:hover{filter:brightness(1.1)!important;transform:translateY(-1px)!important;box-shadow:0 4px 12px rgba(0,208,156,.3)!important}
+    button[data-testid="baseButton-secondary"], .stButton>button:not([data-testid="baseButton-primary"]){background:var(--bg-card2)!important;color:var(--text-secondary)!important;font-weight:600!important;border:1px solid var(--border)!important;border-radius:8px!important;padding:8px 8px!important;transition:all .2s ease!important;font-family:'Inter',sans-serif!important;white-space:nowrap!important;display:flex!important;align-items:center!important;justify-content:center!important;height:44px!important;text-overflow:ellipsis!important;overflow:hidden!important}
+    button[data-testid="baseButton-secondary"]:hover, .stButton>button:not([data-testid="baseButton-primary"]):hover{border-color:var(--accent-green)!important;color:var(--accent-green)!important;background:rgba(0,208,156,.08)!important}
 
     /* Section */
     .section-title{font-size:1.15rem;font-weight:700;color:var(--text-primary);border-left:3px solid var(--accent-green);padding-left:12px;margin:20px 0 12px}
@@ -224,13 +225,19 @@ def inject_css():
         .info-i .info-tip{width:180px;font-size:10px}
         .nav-logo{font-size:1.1rem}
     }
+    @media(max-width:480px){
+        .metric-row{gap:6px!important}
+        .metric-chip{min-width:95px!important;flex:1 1 calc(50% - 6px)!important;padding:8px 10px!important}
+        .rec-banner{padding:14px 16px!important;flex-direction:column!important;text-align:center!important}
+        .analyst-bar-wrap{padding:10px!important}
+    }
     </style>""", unsafe_allow_html=True)
 
 
 def render_loading():
     if not st.session_state.get("app_loaded"):
         b64_str = ""
-        gif_path = "real_bull.gif"
+        gif_path = os.path.join(BASE_DIR, "real_bull.gif")
         if os.path.exists(gif_path):
             with open(gif_path, "rb") as f:
                 b64_str = base64.b64encode(f.read()).decode()
@@ -270,12 +277,12 @@ def render_navbar():
     market = st.session_state.get("market_mode", "🇮🇳 India")
 
     nav_items = [
-        ("🏠 Home", "home"),
-        ("🌱 Beginner", "beginner"),
-        ("🚀 Pro", "pro"),
-        ("🔥 Trending", "trending"),
-        ("🆚 Compare", "compare"),
-        ("📋 Watchlist", "watchlist"),
+        ("Home", "home"),
+        ("Beginner", "beginner"),
+        ("Pro", "pro"),
+        ("Trending", "trending"),
+        ("Compare", "compare"),
+        ("Watchlist", "watchlist"),
     ]
 
     # ── ROW 1: Logo + Mobile hamburger ──
@@ -293,7 +300,7 @@ def render_navbar():
 
     with mob_col:
         # Mobile only — hamburger popover (always rendered but only useful on mobile)
-        with st.popover("☰", use_container_width=True,
+        with st.popover("Menu", use_container_width=True,
                         key=f"mob_pop_{st.session_state.get('nav_counter', 0)}"):
             for label, page in nav_items:
                 is_active = current_page == page
@@ -309,9 +316,9 @@ def render_navbar():
                     st.rerun()
             st.markdown("---")
             if st.session_state.logged_in:
-                st.markdown(f'<div style="color:#E8A838;font-size:12px;font-weight:600;padding:4px 0">👤 {st.session_state.user_name}</div>',
+                st.markdown(f'<div style="color:#E8A838;font-size:12px;font-weight:600;padding:4px 0">User: {st.session_state.user_name}</div>',
                             unsafe_allow_html=True)
-                if st.button("🚪 Logout", key="mob_logout", use_container_width=True):
+                if st.button("Logout", key="mob_logout", use_container_width=True):
                     st.session_state.logged_in = False
                     st.session_state.user_name = "Guest"
                     st.session_state.page = "home"
@@ -321,7 +328,7 @@ def render_navbar():
                         st.session_state.cookie_controller.set("ss_name", "")
                     st.rerun()
             else:
-                if st.button("🔐 Login", key="mob_login", use_container_width=True,
+                if st.button("Login", key="mob_login", use_container_width=True,
                              type="primary" if current_page == "login" else "secondary"):
                     st.session_state.prev_page = current_page
                     st.session_state.page = "login"
@@ -331,7 +338,7 @@ def render_navbar():
     st.markdown('<hr class="ss-sep" style="margin:6px 0 10px"/>', unsafe_allow_html=True)
 
     # ── ROW 2: Search bar (full width, always visible) ──
-    search_placeholder = "🔍 Search Indian stocks by name or ticker..." if market == "🇮🇳 India" else "🔍 Search US stocks by name or ticker..."
+    search_placeholder = "Search Indian stocks by name or ticker..." if market == "🇮🇳 India" else "Search US stocks by name or ticker..."
     search_query = st.text_input(
         "Stock Search",
         placeholder=search_placeholder,
@@ -398,8 +405,8 @@ def render_navbar():
 
     with nav_cols[6]:
         if st.session_state.logged_in:
-            with st.popover(f"👤 {st.session_state.user_name[:8]}", use_container_width=True):
-                if st.button("🚪 Logout", key="nav_logout", use_container_width=True):
+            with st.popover(f"User ({st.session_state.user_name[:8]})", use_container_width=True):
+                if st.button("Logout", key="nav_logout", use_container_width=True):
                     st.session_state.logged_in = False
                     st.session_state.user_name = "Guest"
                     st.session_state.page = "home"
@@ -408,7 +415,7 @@ def render_navbar():
                         st.session_state.cookie_controller.set("ss_name", "")
                     st.rerun()
         else:
-            if st.button("🔐 Login", key="nav_login",
+            if st.button("Login", key="nav_login",
                          use_container_width=True,
                          type="primary" if current_page == "login" else "secondary"):
                 st.session_state.prev_page = current_page
@@ -422,7 +429,7 @@ def render_navbar():
     with c_mode:
         selected_market = st.radio(
             "Market",
-            ["🇮🇳 ₹ India", "🇺🇸 $ US"],
+            ["IN ₹ India", "US $ US"],
             horizontal=True,
             index=0 if market == "🇮🇳 India" else 1,
             label_visibility="collapsed"
@@ -431,17 +438,22 @@ def render_navbar():
         if resolved_market != st.session_state.get("market_mode", "🇮🇳 India"):
             st.session_state.market_mode = resolved_market
             st.session_state._currency = "₹" if resolved_market == "🇮🇳 India" else "$"
+            if "pro_df" in st.session_state: del st.session_state["pro_df"]
+            if "compare_tickers" in st.session_state: del st.session_state["compare_tickers"]
+            if "search_ticker" in st.session_state: del st.session_state["search_ticker"]
             st.rerun()
 
     # Hide Streamlit sidebar toggle
     components.html("""
     <script>
     (function() {
-        var doc = window.parent.document;
-        var toggle = doc.querySelector('button[data-testid="collapsedControl"]');
-        var sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-        if (toggle) toggle.style.display = 'none';
-        if (sidebar) sidebar.style.display = 'none';
+        try {
+            var doc = window.parent.document;
+            var toggle = doc.querySelector('button[data-testid="collapsedControl"]');
+            var sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+            if (toggle) toggle.style.display = 'none';
+            if (sidebar) sidebar.style.display = 'none';
+        } catch(e) {}
     })();
     </script>
     """, height=0, width=0)
@@ -453,43 +465,24 @@ def render_back_button(label="← Back"):
         st.rerun()
 
 
+def _on_breadcrumb_click(step):
+    st.session_state.beginner_step = step
+
 def render_breadcrumb(steps, current):
-    parts = []
-    for i, step in enumerate(steps):
-        parts.append(f'<span class="active">{step}</span>' if i == current else f'<span>{step}</span>')
-        if i < len(steps) - 1:
-            parts.append('<span class="sep">›</span>')
-    st.markdown(f'<div class="breadcrumb">{"".join(parts)}</div>', unsafe_allow_html=True)
-
-
-def safe_pct(value, max_val=80.0, min_val=-100.0, label=""):
-    """Returns formatted % string or '—' for None, NaN, or physically impossible values."""
-    if value is None:
-        return "—"
-    try:
-        v = float(value)
-        if v != v:  # NaN check
-            return "—"
-        if label in ("Div Yield", "Dividend Yield") and (v < 0 or v > 20):
-            return "—"
-        if v > max_val or v < min_val:
-            return "—"
-        return f"{v:.1f}%"
-    except Exception:
-        return "—"
-
-
-def safe_ratio(value):
-    """Returns formatted ratio string or '—' for None, NaN, negative, or >999."""
-    if value is None:
-        return "—"
-    try:
-        v = float(value)
-        if v != v or v <= 0 or v > 999:
-            return "—"
-        return f"{v:.2f}"
-    except Exception:
-        return "—"
+    max_step = max(st.session_state.get("max_beginner_step", 1), current + 1)
+    st.session_state.max_beginner_step = max_step
+    
+    cols = st.columns(len(steps))
+    for i, step_name in enumerate(steps):
+        step_num = i + 1
+        with cols[i]:
+            if step_num == current + 1:
+                st.button(f"{step_num}. {step_name}", key=f"bc_step_{i}_{step_num}", type="primary", use_container_width=True)
+            elif step_num <= max_step:
+                lbl = f"✓ {step_name}" if step_num < current + 1 else f"{step_num}. {step_name}"
+                st.button(lbl, key=f"bc_step_{i}_{step_num}", type="secondary", use_container_width=True, on_click=_on_breadcrumb_click, args=(step_num,))
+            else:
+                st.button(f"{step_num}. {step_name}", key=f"bc_step_{i}_{step_num}", disabled=True, use_container_width=True)
 
 
 def metric_chip(label, value, color="", tip_html=""):

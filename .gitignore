@@ -3,14 +3,25 @@
 .env
 .env.*
 
-# Python cache
+# Python cache & runtime
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.streamlit/cache/
+.streamlit/*.log
+.streamlit/*.txt
+
+# Logs and trace dumps
+*.log
+*.trace
+streamlit_log.txt
+trace.txt
 
 # Conda environment (local only)
 .conda/
+venv/
+env/
 
 # IDE / OS junk
 .vscode/
@@ -19,9 +30,7 @@ __pycache__/
 Thumbs.db
 .DS_Store
 
-# Dev-only helper scripts
+# Dev-only helper scripts & scratch files
 create_tickers.py
 gif_b64.txt
-streamlit_log.txt
-trace.txt
 README (1).md

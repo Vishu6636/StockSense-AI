@@ -76,6 +76,9 @@ def main():
     render_navbar()
     
     page = st.session_state.page
+    if page != "pro" and st.session_state.get("_active_view") == "pro":
+        st.session_state._active_view = page
+
     if page == "login": page_login()
     elif page == "home": page_home()
     elif page == "beginner": page_beginner()
