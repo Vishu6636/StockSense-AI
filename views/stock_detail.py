@@ -289,7 +289,7 @@ def render_ai_tab(ticker, info, ta):
     info_summary = {
         "price": f"{price:,.2f}", "pe": f"{info.get('trailingPE') or info.get('forwardPE') or 'N/A'}",
         "roe": f"{(info.get('returnOnEquity') or 0)*100:.1f}",
-        "de": f"{(info.get('debtToEquity') or 0)/100 if (info.get('debtToEquity') or 0)>10 else (i.get('debtToEquity') or 0):.2f}" if "i" in locals() else f"{(info.get('debtToEquity') or 0)/100 if (info.get('debtToEquity') or 0)>10 else (info.get('debtToEquity') or 0):.2f}",
+        "de": f"{(info.get('debtToEquity') or 0)/100 if (info.get('debtToEquity') or 0)>10 else (info.get('debtToEquity') or 0):.2f}",
         "sales_g": f"{(info.get('revenueGrowth') or 0)*100:.1f}",
         "profit_g": f"{(info.get('earningsGrowth') or 0)*100:.1f}",
         "div_yield": f"{(info.get('dividendYield') or 0)*100:.2f}",
