@@ -44,7 +44,9 @@ def page_compare():
             fig.add_trace(go.Scatter(x=hist.index, y=norm.values, name=name, line=dict(color=colors[i], width=2.5)))
     apply_theme(fig, height=320, title="Normalized Price (Base 100)")
     fig.update_layout(legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#FAFAFA")))
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    # Explicit keys are required because Streamlit derives an element ID from a
+    # chart's contents.  Two scorecards can legitimately have the same values.
+    st.plotly_chart(fig, key="compare_price_performance", use_container_width=True, config={"displayModeBar": False})
 
     st.markdown('<div class="section-title">Side-by-Side Metrics</div>', unsafe_allow_html=True)
     _cur = st.session_state.get("_currency", "₹")
@@ -80,7 +82,12 @@ def page_compare():
     for i, s in enumerate(stocks):
         with rcols[i]:
             st.markdown(f"<div style='text-align:center;font-weight:700;margin-bottom:6px'>{names[i]}</div>", unsafe_allow_html=True)
-            st.plotly_chart(radar_chart(s["info"]), use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(
+                radar_chart(s["info"]),
+                key=f"compare_scorecard_{s['ticker']}_{i}",
+                use_container_width=True,
+                config={"displayModeBar": False},
+            )
 
     st.markdown('<div class="section-title">StockSense AI Conclusion</div>', unsafe_allow_html=True)
     scores = []

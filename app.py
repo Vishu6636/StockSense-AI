@@ -24,6 +24,7 @@ from views.trending import page_trending
 from views.beginner import page_beginner
 from views.pro import page_pro
 from views.login import page_login
+from views.portfolio import page_portfolio
 
 
 # ── SESSION STATE ──
@@ -37,23 +38,30 @@ def init_session():
         "market_mode": "🇮🇳 India",
         "_currency": "₹",
         "last_search": "",
+        "eli5_mode": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
     if CookieController is not None and "cookie_controller" not in st.session_state:
-        st.session_state.cookie_controller = CookieController()
+        try:
+            st.session_state.cookie_controller = CookieController()
+        except Exception:
+            st.session_state.cookie_controller = None
     
     if "cookie_controller" in st.session_state and not st.session_state.logged_in:
         c = st.session_state.cookie_controller
         if c is not None:
-            saved_email = c.get("ss_email")
-            saved_name = c.get("ss_name")
-            if saved_email and saved_name:
-                st.session_state.logged_in = True
-                st.session_state.user_email = saved_email
-                st.session_state.user_name = saved_name
+            try:
+                saved_email = c.get("ss_email")
+                saved_name = c.get("ss_name")
+                if saved_email and saved_name:
+                    st.session_state.logged_in = True
+                    st.session_state.user_email = saved_email
+                    st.session_state.user_name = saved_name
+            except Exception:
+                pass
 
 
 init_session()
@@ -87,6 +95,7 @@ def main():
     elif page == "search": page_search()
     elif page == "compare": page_compare()
     elif page == "watchlist": page_watchlist()
+    elif page == "portfolio": page_portfolio()
     else: page_home()
     
     st.markdown(f"""<div class="watermark">

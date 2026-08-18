@@ -1,6 +1,6 @@
 import streamlit as st
 from data_service import load_ticker_list, screen_stocks_with_progress
-from ui_components import render_breadcrumb, render_sebi_disclaimer
+from ui_components import render_breadcrumb, render_sebi_disclaimer, render_sip_calculator
 from views.stock_detail import render_super_investors, render_simulator, get_stock_data
 
 def page_beginner():
@@ -19,7 +19,7 @@ def page_beginner():
 
     if step == 1:
         st.markdown("### How do you feel about risk?")
-        risk = st.radio("", ["Low Risk — Safe, steady returns", "Medium Risk — Balanced growth", "High Risk — Maximum growth"], key="bq_risk")
+        risk = st.radio("Risk level", ["Low Risk — Safe, steady returns", "Medium Risk — Balanced growth", "High Risk — Maximum growth"], key="bq_risk", label_visibility="collapsed")
         if st.button("Next Step", key="bq1", type="primary"):
             bq["risk"] = risk
             st.session_state.bq = bq
@@ -37,7 +37,7 @@ def page_beginner():
 
     elif step == 3:
         st.markdown("### How long do you plan to invest?")
-        horizon = st.radio("", ["Short-term (< 1 year)", "Medium-term (1–3 years)", "Mid-Long term (3–6 years)", "Long-term (6+ years)"], key="bq_hor")
+        horizon = st.radio("Investment horizon", ["Short-term (< 1 year)", "Medium-term (1–3 years)", "Mid-Long term (3–6 years)", "Long-term (6+ years)"], key="bq_hor", label_visibility="collapsed")
         if st.button("Next Step", key="bq3", type="primary"):
             bq["horizon"] = horizon
             st.session_state.bq = bq
@@ -89,6 +89,17 @@ def page_beginner():
 
         passed = df[df["Status"] == "✅ Pass"]
         if budget: passed = passed[passed["Price"] <= budget]
+
+        # A live-data outage or strict filters can leave the scan with only
+        # rejected rows. Do not render empty "Top picks" sections in that case.
+        if passed.empty:
+            st.warning("No stocks matched these filters with the currently available market data.")
+            st.info("Try a higher-risk profile, a larger budget, or run the scan again in a few minutes.")
+            if st.button("Adjust Preferences", key="beg_retry"):
+                st.session_state.beginner_step = 1
+                st.rerun()
+            return
+
         top3 = passed.head(3); top10 = passed.head(10)
 
         st.markdown('<div class="section-title">Top 3 Picks For You</div>', unsafe_allow_html=True)
@@ -138,8 +149,13 @@ def page_beginner():
             data = get_stock_data(top3.iloc[0]["Ticker"])
             if data: render_simulator(data["info"])
 
+        st.markdown('<hr class="ss-sep"/>', unsafe_allow_html=True)
+        render_sip_calculator()
+        st.markdown('<hr class="ss-sep"/>', unsafe_allow_html=True)
+
         if st.button("Start Over", key="beg_rst"):
             st.session_state.beginner_step = 1
             st.session_state.bq = {}
             st.rerun()
         render_sebi_disclaimer()
+

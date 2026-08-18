@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.express as px
 from data_service import screen_stocks_with_progress, load_ticker_list
-from ui_components import apply_theme
+from ui_components import apply_theme, render_sebi_disclaimer
 
 def reset_pro_state():
     pro_keys = [
@@ -83,6 +83,8 @@ def page_pro():
 
         with tab_pass:
             top10_passed = passed.head(10)
+            if passed.empty:
+                st.info("No stocks qualify with the current filters and available live data. Relax a filter or run the scan again shortly.")
             st.markdown('<div class="section-title">Top Picks — Click to Analyze</div>', unsafe_allow_html=True)
             for i, row in top10_passed.iterrows():
                 rc1, rc2, rc3, rc4, rc5 = st.columns([3, 1.5, 1.5, 1.5, 1.5])
@@ -126,4 +128,8 @@ def page_pro():
                 apply_theme(fig, height=350, title="Stock Score Comparison")
                 fig.update_layout(coloraxis_showscale=False)
                 fig.update_xaxes(tickangle=-30)
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, key="pro_score_chart", use_container_width=True, config={"displayModeBar": False})
+
+    st.markdown('<hr class="ss-sep"/>', unsafe_allow_html=True)
+    render_sebi_disclaimer()
+

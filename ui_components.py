@@ -2,7 +2,11 @@ import streamlit as st
 import base64
 import os
 import plotly.graph_objects as go
-from data_service import get_index_data, get_market_indices, search_tickers
+from data_service import (
+    get_index_data, get_market_indices, search_tickers,
+    calculate_sip_lumpsum, get_sector_heatmap_data, get_eli5_explanation,
+    get_insider_ownership_analysis, get_sector_peers_cached, analyze_portfolio_holdings
+)
 import streamlit.components.v1 as components
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -283,12 +287,13 @@ def render_navbar():
         ("Trending", "trending"),
         ("Compare", "compare"),
         ("Watchlist", "watchlist"),
+        ("Portfolio", "portfolio"),
     ]
 
     # ── ROW 1: Logo + Mobile hamburger ──
     logo_col, mob_col = st.columns([6, 1], vertical_alignment="center")
     with logo_col:
-        market_label = "500 Indian Stocks · Live Data" if market == "🇮🇳 India" else "300 US Stocks · Live Data"
+        market_label = "500 Indian Stocks · Live Data" if "India" in market else "300 US Stocks · Live Data"
         st.markdown(f'''
         <div class="navbar-brand">
           <div class="nav-logo">{LOGO_SVG}
@@ -324,8 +329,11 @@ def render_navbar():
                     st.session_state.page = "home"
                     st.session_state.nav_counter = st.session_state.get("nav_counter", 0) + 1
                     if "cookie_controller" in st.session_state:
-                        st.session_state.cookie_controller.set("ss_email", "")
-                        st.session_state.cookie_controller.set("ss_name", "")
+                        try:
+                            st.session_state.cookie_controller.set("ss_email", "")
+                            st.session_state.cookie_controller.set("ss_name", "")
+                        except Exception:
+                            pass
                     st.rerun()
             else:
                 if st.button("Login", key="mob_login", use_container_width=True,
@@ -338,7 +346,7 @@ def render_navbar():
     st.markdown('<hr class="ss-sep" style="margin:6px 0 10px"/>', unsafe_allow_html=True)
 
     # ── ROW 2: Search bar (full width, always visible) ──
-    search_placeholder = "Search Indian stocks by name or ticker..." if market == "🇮🇳 India" else "Search US stocks by name or ticker..."
+    search_placeholder = "Search Indian stocks by name or ticker..." if "India" in market else "Search US stocks by name or ticker..."
     search_query = st.text_input(
         "Stock Search",
         placeholder=search_placeholder,
@@ -387,7 +395,7 @@ def render_navbar():
     </style>
     """, unsafe_allow_html=True)
 
-    nav_cols = st.columns([1, 1, 1, 1, 1, 1, 1])  # 6 nav + 1 login
+    nav_cols = st.columns([1, 1, 1, 1, 1, 1, 1, 1])  # 7 nav + 1 login
     for i, (label, page) in enumerate(nav_items):
         with nav_cols[i]:
             if i == 0:
@@ -403,7 +411,7 @@ def render_navbar():
                     st.session_state.bq = {}
                 st.rerun()
 
-    with nav_cols[6]:
+    with nav_cols[7]:
         if st.session_state.logged_in:
             with st.popover(f"User ({st.session_state.user_name[:8]})", use_container_width=True):
                 if st.button("Logout", key="nav_logout", use_container_width=True):
@@ -411,8 +419,11 @@ def render_navbar():
                     st.session_state.user_name = "Guest"
                     st.session_state.page = "home"
                     if "cookie_controller" in st.session_state:
-                        st.session_state.cookie_controller.set("ss_email", "")
-                        st.session_state.cookie_controller.set("ss_name", "")
+                        try:
+                            st.session_state.cookie_controller.set("ss_email", "")
+                            st.session_state.cookie_controller.set("ss_name", "")
+                        except Exception:
+                            pass
                     st.rerun()
         else:
             if st.button("Login", key="nav_login",
@@ -431,13 +442,13 @@ def render_navbar():
             "Market",
             ["IN ₹ India", "US $ US"],
             horizontal=True,
-            index=0 if market == "🇮🇳 India" else 1,
+            index=0 if "India" in market else 1,
             label_visibility="collapsed"
         )
         resolved_market = "🇮🇳 India" if "India" in selected_market else "🇺🇸 US"
         if resolved_market != st.session_state.get("market_mode", "🇮🇳 India"):
             st.session_state.market_mode = resolved_market
-            st.session_state._currency = "₹" if resolved_market == "🇮🇳 India" else "$"
+            st.session_state._currency = "₹" if "India" in resolved_market else "$"
             if "pro_df" in st.session_state: del st.session_state["pro_df"]
             if "compare_tickers" in st.session_state: del st.session_state["compare_tickers"]
             if "search_ticker" in st.session_state: del st.session_state["search_ticker"]
@@ -658,3 +669,179 @@ def radar_chart(info):
         margin=dict(l=20, r=20, t=30, b=20),
         title="Fundamental Scorecard", title_font=dict(size=13, color="#FAFAFA"))
     return fig
+
+
+# ═══════════════════════════════════════════
+#  PHASE 4: NEW UI RENDER COMPONENTS
+# ═══════════════════════════════════════════
+
+def render_sip_calculator():
+    st.markdown('<div class="section-title">💡 SIP & Wealth Growth Calculator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Simulate long-term wealth creation with Systematic Investment Plans (SIP) or One-time Lumpsum investments.</div>', unsafe_allow_html=True)
+    
+    currency = st.session_state.get("_currency", "₹")
+    c1, c2 = st.columns([1, 1])
+    
+    with c1:
+        monthly_sip = st.slider(f"Monthly SIP ({currency})", min_value=500, max_value=100000, value=5000, step=500, key="sip_monthly_slider")
+        lumpsum = st.number_input(f"One-Time Lumpsum Investment ({currency})", min_value=0, value=0, step=5000, key="sip_lumpsum_input")
+        tenure = st.slider("Investment Horizon (Years)", min_value=1, max_value=30, value=10, key="sip_tenure_slider")
+        
+    with c2:
+        expected_cagr = st.slider("Expected Annual Return (CAGR %)", min_value=4.0, max_value=25.0, value=12.0, step=0.5, key="sip_cagr_slider")
+        inflation = st.slider("Expected Annual Inflation (%)", min_value=0.0, max_value=12.0, value=6.0, step=0.5, key="sip_inflation_slider")
+        
+    result = calculate_sip_lumpsum(monthly_sip, lumpsum, expected_cagr, tenure, inflation)
+    s = result["summary"]
+    df = result["df"]
+    
+    chips = [
+        metric_chip("Total Invested", f"{currency}{s['total_invested']:,.0f}"),
+        metric_chip("Projected Wealth", f"{currency}{s['final_wealth']:,.0f}", "green"),
+        metric_chip("Estimated Wealth Gain", f"{currency}{s['total_gain']:,.0f}", "gold"),
+        metric_chip("Inflation-Adjusted Value", f"{currency}{s['real_wealth']:,.0f}", "purple"),
+        metric_chip("Wealth Multiplier", f"{s['wealth_multiplier']}x", "blue")
+    ]
+    render_metric_row(chips)
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df["Year"], y=df["Total Invested"], name="Total Invested",
+                             mode="lines", line=dict(color="#4C9AFF", width=2), fill="tozeroy", fillcolor="rgba(76,154,255,0.15)"))
+    fig.add_trace(go.Scatter(x=df["Year"], y=df["Estimated Wealth"], name="Projected Wealth",
+                             mode="lines", line=dict(color="#00D09C", width=3)))
+    fig.add_trace(go.Scatter(x=df["Year"], y=df["Inflation Adjusted"], name="Real Purchasing Power",
+                             mode="lines", line=dict(color="#E8A838", width=2, dash="dash")))
+    apply_theme(fig, height=350, title=f"Wealth Growth Projection over {tenure} Years ({currency})")
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_sector_heatmap(market_mode="🇮🇳 India"):
+    st.markdown('<div class="section-title">🔥 Sector Performance Heatmap</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Real-time daily performance across key market sectors and industry groups.</div>', unsafe_allow_html=True)
+    
+    df = get_sector_heatmap_data(market_mode)
+    if df.empty:
+        st.info("Sector performance data currently updating...")
+        return
+        
+    cols = st.columns(min(len(df), 4))
+    for i, row in df.iterrows():
+        chg = row["AvgChange%"]
+        bg_color = "rgba(0,208,156,0.08)" if chg >= 0 else "rgba(235,91,60,0.08)"
+        border_color = "rgba(0,208,156,0.3)" if chg >= 0 else "rgba(235,91,60,0.3)"
+        text_color = "#00D09C" if chg >= 0 else "#EB5B3C"
+        arrow = "▲" if chg >= 0 else "▼"
+        
+        with cols[i % 4]:
+            st.markdown(f"""
+            <div class="ss-card" style="background:{bg_color};border-color:{border_color};margin-bottom:12px">
+              <div style="font-weight:700;font-size:1rem;color:#FAFAFA">{row['Sector']}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:1.4rem;font-weight:800;color:{text_color};margin:6px 0">
+                {arrow} {abs(chg):.2f}%
+              </div>
+              <div style="font-size:11px;color:#9E9E9E">Top Gainer: <strong style="color:#FAFAFA">{row['Top Gainer']}</strong> (+{row['TopGainer%']}%)</div>
+              <div style="font-size:10px;color:#616161;margin-top:4px">{row['Stocks']} Stocks Monitored</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+    with st.expander("📊 Detailed Sector Breakdown Table"):
+        st.dataframe(df, use_container_width=True)
+
+
+def render_eli5_toggle():
+    current_val = st.session_state.get("eli5_mode", False)
+    val = st.toggle("💡 Explain Like I'm New (Beginner Mode)", value=current_val, key="eli5_mode_toggle_key")
+    st.session_state.eli5_mode = val
+    return val
+
+
+def render_eli5_card(metric_name: str, value):
+    if not st.session_state.get("eli5_mode", False):
+        return
+    info = get_eli5_explanation(metric_name, value)
+    badge = render_badge(info["status"], info["badge_color"])
+    st.markdown(f"""
+    <div style="background:rgba(124,92,252,0.08);border:1px solid rgba(124,92,252,0.25);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <strong style="color:#FAFAFA">💡 {info['title']}</strong>
+        {badge}
+      </div>
+      <div style="color:#9E9E9E">{info['desc']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_insider_tracker(ticker: str, info: dict):
+    st.markdown('<div class="section-title">👔 Insider & Promoter Ownership Tracker</div>', unsafe_allow_html=True)
+    
+    data = get_insider_ownership_analysis(ticker, info)
+    c1, c2 = st.columns([1, 1])
+    
+    with c1:
+        rating_color = "green" if data["confidence_score"] >= 75 else ("gold" if data["confidence_score"] >= 50 else "red")
+        st.markdown(f"""
+        <div class="ss-card">
+          <div style="font-size:11px;color:#9E9E9E;text-transform:uppercase;letter-spacing:1px">Insider Confidence Rating</div>
+          <div style="font-size:1.6rem;font-weight:800;margin:6px 0">{render_badge(data['rating'], rating_color)}</div>
+          <div style="font-size:1.2rem;font-family:'JetBrains Mono',monospace;font-weight:700;color:#FAFAFA">
+            Confidence Score: {data['confidence_score']}/100
+          </div>
+          <hr class="ss-sep" style="margin:10px 0"/>
+          <div style="font-size:12px;color:#FAFAFA;margin-bottom:4px">Key Ownership Signals:</div>
+        """, unsafe_allow_html=True)
+        for r in data["reasons"]:
+            st.markdown(f'<div style="font-size:12px;color:#9E9E9E;margin-bottom:3px">{r}</div>', unsafe_allow_html=True)
+        if not data["reasons"]:
+            st.markdown('<div style="font-size:12px;color:#9E9E9E">No unusual insider concentration flagged.</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with c2:
+        fig = go.Figure(data=[go.Pie(
+            labels=["Promoters / Insiders", "Institutional Investors", "Public & Others"],
+            values=[data["promoter_pct"], data["inst_pct"], data["public_pct"]],
+            hole=0.5,
+            marker_colors=["#00D09C", "#7C5CFC", "#2A2A2A"]
+        )])
+        apply_theme(fig, height=220, title="Shareholding Distribution")
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def render_peer_comparison_card(ticker: str, market_mode: str = "🇮🇳 India"):
+    peers = get_sector_peers_cached(ticker, market_mode)
+    if not peers:
+        return
+        
+    st.markdown('<div class="section-title">🔍 Auto-Suggested Sector Peers</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Head-to-head quick comparison with top competitors in the same industry.</div>', unsafe_allow_html=True)
+    
+    cols = st.columns(len(peers))
+    for i, p in enumerate(peers):
+        p_sym = p["ticker"]
+        p_name = p["name"]
+        info = get_stock_info_cached(p_sym)
+        price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+        pe = info.get("trailingPE") or info.get("forwardPE") or 0
+        roe = (info.get("returnOnEquity") or 0) * 100
+        _cur = st.session_state.get("_currency", "₹")
+        
+        with cols[i]:
+            st.markdown(f"""
+            <div class="ss-card">
+              <div style="font-weight:700;font-size:1rem;color:#FAFAFA">{p_name}</div>
+              <div style="font-size:11px;color:#9E9E9E">{p_sym}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:1.3rem;font-weight:700;color:#00D09C;margin:8px 0">
+                {_cur}{price:,.2f}
+              </div>
+              <div style="font-size:12px;color:#9E9E9E">P/E: <strong style="color:#FAFAFA">{round(pe, 1) if pe else 'N/A'}</strong></div>
+              <div style="font-size:12px;color:#9E9E9E">ROE: <strong style="color:#FAFAFA">{round(roe, 1)}%</strong></div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            def _goto_compare(current_t, peer_t):
+                st.session_state.compare_tickers = [current_t, peer_t]
+                st.session_state.prev_page = st.session_state.page
+                st.session_state.page = "compare"
+                
+            st.button(f"Compare with {p_sym.split('.')[0]}", key=f"peer_cmp_{p_sym}_{i}",
+                      use_container_width=True, type="secondary",
+                      on_click=_goto_compare, args=(ticker, p_sym))

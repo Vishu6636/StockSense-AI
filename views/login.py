@@ -42,8 +42,11 @@ def page_login():
                     st.session_state.user_email = email.strip()
                     st.session_state.user_name = name.strip()
                     if "cookie_controller" in st.session_state and st.session_state.cookie_controller is not None:
-                        st.session_state.cookie_controller.set("ss_email", email.strip())
-                        st.session_state.cookie_controller.set("ss_name", name.strip())
+                        try:
+                            st.session_state.cookie_controller.set("ss_email", email.strip())
+                            st.session_state.cookie_controller.set("ss_name", name.strip())
+                        except Exception:
+                            pass
                     st.success(f"Welcome aboard, {st.session_state.user_name}!")
                     time.sleep(0.6)
                     st.session_state.page = st.session_state.prev_page or "home"
@@ -66,4 +69,6 @@ def page_login():
 
         render_back_button("Back")
 
-        st.markdown('<div style="color:#616161;font-size:11px;text-align:center;margin-top:16px">Your data is stored securely. We never share your information.</div>', unsafe_allow_html=True)
+        st.markdown("""<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 14px;margin-top:16px;font-size:11px;color:#9E9E9E">
+          🔒 <strong>Privacy & Cookie Disclosure</strong>: StockSense AI stores your login email, display name, market mode preference, and stock watchlist locally in browser cookies (`streamlit-cookies-controller`) and session memory. No sensitive credentials or financial account data are collected or shared.
+        </div>""", unsafe_allow_html=True)

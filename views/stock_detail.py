@@ -5,7 +5,9 @@ from data_service import (get_stock_data, compute_technicals, generate_recommend
 from ui_components import (render_back_button, metric_chip, render_metric_row, 
                            render_stock_header, candlestick_chart, 
                            volume_chart, rsi_chart, macd_chart, bollinger_chart, 
-                           radar_chart, render_sebi_disclaimer)
+                           radar_chart, render_sebi_disclaimer,
+                           render_eli5_toggle, render_eli5_card, render_insider_tracker,
+                           render_peer_comparison_card)
 
 def safe_pct(value, max_val=2000.0, min_val=-1000.0):
     """Returns formatted % string or '—' for missing/unrealistic values."""
@@ -120,6 +122,14 @@ def render_fundamentals(ticker, info):
         metric_chip("Promoter Hold", f"{promoter:.1f}%" if promoter else "N/A", "green" if promoter>50 else ""),
     ]
     render_metric_row(chips)
+    
+    if st.session_state.get("eli5_mode"):
+        render_eli5_card("P/E", safe_pe)
+        render_eli5_card("D/E", safe_de)
+        render_eli5_card("ROE", roe)
+        
+    st.markdown('<hr class="ss-sep"/>', unsafe_allow_html=True)
+    render_insider_tracker(ticker, info)
 
 def render_technicals(ta, hist):
     if not ta:
@@ -154,10 +164,10 @@ def render_technicals(ta, hist):
 
     tab1,tab2,tab3,tab4 = st.tabs(["🕯️ Candles","📈 RSI","📊 MACD","🎯 Bollinger"])
     with tab1:
-        st.plotly_chart(candlestick_chart(hist,"Price (1 Year)"),use_container_width=True,config={"displayModeBar":False})
-        st.plotly_chart(volume_chart(hist),use_container_width=True,config={"displayModeBar":False})
+        st.plotly_chart(candlestick_chart(hist,"Price (1 Year)"), key="technical_candlestick", use_container_width=True, config={"displayModeBar":False})
+        st.plotly_chart(volume_chart(hist), key="technical_volume", use_container_width=True, config={"displayModeBar":False})
     with tab2:
-        st.plotly_chart(rsi_chart(ta["rsi"].dropna()),use_container_width=True,config={"displayModeBar":False})
+        st.plotly_chart(rsi_chart(ta["rsi"].dropna()), key="technical_rsi", use_container_width=True, config={"displayModeBar":False})
         if rsi_val is not None:
             if rsi_val<30: st.success("🟢 RSI below 30 — **Oversold**. Potential buying opportunity!")
             elif rsi_val>70: st.error("🔴 RSI above 70 — **Overbought**. Be cautious!")
@@ -165,9 +175,9 @@ def render_technicals(ta, hist):
         else:
             st.info("🟡 RSI data unavailable for neutral zone check.")
     with tab3:
-        st.plotly_chart(macd_chart(ta["macd"].dropna(),ta["signal"].dropna(),ta["macd_hist"].dropna()),use_container_width=True,config={"displayModeBar":False})
+        st.plotly_chart(macd_chart(ta["macd"].dropna(),ta["signal"].dropna(),ta["macd_hist"].dropna()), key="technical_macd", use_container_width=True, config={"displayModeBar":False})
     with tab4:
-        st.plotly_chart(bollinger_chart(hist,ta),use_container_width=True,config={"displayModeBar":False})
+        st.plotly_chart(bollinger_chart(hist,ta), key="technical_bollinger", use_container_width=True, config={"displayModeBar":False})
 
 def render_analyst_consensus(recs):
     st.markdown('<div class="section-title">🎯 Analyst Consensus</div>', unsafe_allow_html=True)
@@ -328,6 +338,7 @@ def render_stock_detail(ticker, show_news=False, show_back=True):
     ta = compute_technicals(hist_1y)
     
     if show_back: render_back_button()
+    render_eli5_toggle()
     render_stock_header(info)
 
     is_indian = ticker.endswith(".NS") or ticker.endswith(".BO") or "India" in st.session_state.get("market_mode", "India")
@@ -343,7 +354,7 @@ def render_stock_detail(ticker, show_news=False, show_back=True):
         with tab_ai: render_ai_tab(ticker, info, ta)
         with tab_radar:
             c1, c2 = st.columns([1, 1])
-            with c1: st.plotly_chart(radar_chart(info), use_container_width=True, config={"displayModeBar": False})
+            with c1: st.plotly_chart(radar_chart(info), key=f"stock_scorecard_{ticker}", use_container_width=True, config={"displayModeBar": False})
             with c2: render_recommendation(info, ta); render_sebi_disclaimer()
         with tab_analyst: render_analyst_consensus(recs)
         with tab_sim: render_simulator(info)
@@ -358,8 +369,11 @@ def render_stock_detail(ticker, show_news=False, show_back=True):
         with tab_ai: render_ai_tab(ticker, info, ta)
         with tab_radar:
             c1, c2 = st.columns([1, 1])
-            with c1: st.plotly_chart(radar_chart(info), use_container_width=True, config={"displayModeBar": False})
+            with c1: st.plotly_chart(radar_chart(info), key=f"stock_scorecard_{ticker}", use_container_width=True, config={"displayModeBar": False})
             with c2: render_recommendation(info, ta); render_sebi_disclaimer()
         with tab_analyst: render_analyst_consensus(recs)
         with tab_investors: render_super_investors(ticker)
         with tab_sim: render_simulator(info)
+
+    st.markdown('<hr class="ss-sep"/>', unsafe_allow_html=True)
+    render_peer_comparison_card(ticker, st.session_state.get("market_mode", "India"))
