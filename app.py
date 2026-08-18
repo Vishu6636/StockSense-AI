@@ -13,7 +13,7 @@ except ImportError:
 
 warnings.filterwarnings("ignore")
 
-st.set_page_config(page_title="StockSense AI", page_icon="📊", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="StockSense AI", layout="wide", initial_sidebar_state="collapsed")
 
 from ui_components import inject_css, render_loading, render_ticker_bar, render_navbar
 from views.home import page_home
@@ -35,7 +35,7 @@ def init_session():
         "search_ticker": "", "compare_tickers": [], "loading": False,
         "app_loaded": False, "use_quick50": True,
         "watchlist": [], "nav_counter": 0,
-        "market_mode": "🇮🇳 India",
+        "market_mode": "India",
         "_currency": "₹",
         "last_search": "",
         "eli5_mode": False,
@@ -99,8 +99,8 @@ def main():
     else: page_home()
     
     st.markdown(f"""<div class="watermark">
-      StockSense AI v4.0 · India & US Markets · Built with ❤️ using Python & Streamlit · Live data via yfinance ·
-      <span style="color:#EB5B3C">⚠️ Not SEBI/SEC registered. Not financial advice.</span></div>""", unsafe_allow_html=True)
+      StockSense AI v4.0 · India & US Markets · Built using Python & Streamlit · Live data via yfinance ·
+      <span style="color:#EB5B3C">Not SEBI/SEC registered. Not financial advice.</span></div>""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

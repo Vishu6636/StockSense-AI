@@ -453,13 +453,13 @@ def screen_stocks_with_progress(stocks_dict, max_pe=25, max_de=1.0, min_roe=10,
     # Yahoo blocks bursts of fundamental-data requests from shared cloud IPs.
     est_time = max(4, total * 0.18)
     # Using dynamic currency and handling limit sizes
-    market = st.session_state.get("market_mode", "🇮🇳 India")
+    market = st.session_state.get("market_mode", "India")
     currency = "₹" if "India" in market else "$"
     
-    st.markdown(f"<div style='color:#9E9E9E;font-size:12px;margin-bottom:8px'>⏱️ Estimated time: ~{est_time:.0f}s for {total} stocks</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='color:#9E9E9E;font-size:12px;margin-bottom:8px'>Estimated time: ~{est_time:.0f}s for {total} stocks</div>", unsafe_allow_html=True)
 
     # Pre-fetch all stock info in parallel using ThreadPoolExecutor
-    status_text.markdown(f"<div style='color:#9E9E9E;font-size:13px'>📊 Pre-fetching data for {total} stocks...</div>", unsafe_allow_html=True)
+    status_text.markdown(f"<div style='color:#9E9E9E;font-size:13px'>Pre-fetching data for {total} stocks...</div>", unsafe_allow_html=True)
     info_cache = {}
     tickers_list = list(stocks_dict.items())
 
@@ -595,7 +595,7 @@ def screen_stocks_with_progress(stocks_dict, max_pe=25, max_de=1.0, min_roe=10,
                 "NPM%":round(npm,1),f"FCF ({'Cr' if 'India' in market else 'B'})":fcf_val if fcf else 0,
                 "Advantage":adv,f"Market Cap ({'Cr' if 'India' in market else 'B'})":mcap_val if market_cap else 0,
                 "Score":score,"Shares with Budget":shares_can_buy,
-                "Status":"✅ Pass" if score >= 35 else "❌ Reject",
+                "Status":"Pass" if score >= 35 else "Reject",
             })
         except Exception:
             continue

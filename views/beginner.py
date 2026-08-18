@@ -87,7 +87,7 @@ def page_beginner():
                 st.rerun()
             return
 
-        passed = df[df["Status"] == "✅ Pass"]
+        passed = df[df["Status"].str.contains("Pass")]
         if budget: passed = passed[passed["Price"] <= budget]
 
         # A live-data outage or strict filters can leave the scan with only

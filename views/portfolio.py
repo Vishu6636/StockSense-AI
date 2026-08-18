@@ -19,10 +19,10 @@ NVDA, 5, 450.00
 AMZN, 15, 130.00"""
 
 def page_portfolio():
-    market = st.session_state.get("market_mode", "🇮🇳 India")
+    market = st.session_state.get("market_mode", "India")
     currency = st.session_state.get("_currency", "₹")
     
-    st.markdown('<div class="hero-title">💼 Portfolio Import & Health Analyzer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-title">Portfolio Import & Health Analyzer</div>', unsafe_allow_html=True)
     st.markdown('<div class="hero-sub">Upload or paste your stock holdings to get instant portfolio-level P/E, sector concentration, and risk rating.</div>', unsafe_allow_html=True)
     st.markdown('<hr class="ss-sep"/>', unsafe_allow_html=True)
     
@@ -31,7 +31,7 @@ def page_portfolio():
     c_input, c_results = st.columns([1, 2])
     
     with c_input:
-        st.markdown('<div class="section-title">📥 Import Holdings</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Import Holdings</div>', unsafe_allow_html=True)
         st.caption("Paste holding data in CSV format (`Ticker, Shares, Buy Price`):")
         
         raw_csv = st.text_area(
@@ -44,11 +44,11 @@ def page_portfolio():
         
         btn_c1, btn_c2 = st.columns(2)
         with btn_c1:
-            if st.button("📊 Analyze Portfolio", type="primary", use_container_width=True, key="btn_analyze_portfolio"):
+            if st.button("Analyze Portfolio", type="primary", use_container_width=True, key="btn_analyze_portfolio"):
                 st.session_state.portfolio_csv_input = raw_csv
                 st.rerun()
         with btn_c2:
-            if st.button("🔄 Reset Sample", type="secondary", use_container_width=True, key="btn_reset_sample"):
+            if st.button("Reset Sample", type="secondary", use_container_width=True, key="btn_reset_sample"):
                 st.session_state.portfolio_csv_input = sample_text
                 st.rerun()
                 
@@ -68,7 +68,7 @@ def page_portfolio():
                 
     with c_results:
         if not holdings_list:
-            st.info("👈 Paste your stock holdings or click 'Analyze Portfolio' to view your report.")
+            st.info("Paste your stock holdings or click 'Analyze Portfolio' to view your report.")
             return
             
         with st.spinner("Analyzing portfolio holdings and fetching live valuation..."):
@@ -78,7 +78,7 @@ def page_portfolio():
             st.error("No valid stock tickers found in input. Please check the CSV format.")
             return
             
-        st.markdown('<div class="section-title">📈 Portfolio Health Dashboard</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Portfolio Health Dashboard</div>', unsafe_allow_html=True)
         
         pnl_color = "green" if res["total_pnl"] >= 0 else "red"
         pnl_arrow = "▲" if res["total_pnl"] >= 0 else "▼"
@@ -96,7 +96,6 @@ def page_portfolio():
         risk_color = "green" if "Low Risk" in res["risk_rating"] else ("gold" if "Moderate" in res["risk_rating"] else "red")
         st.markdown(f"""
         <div class="rec-banner {risk_color}" style="margin:12px 0">
-          <div class="rec-icon">🛡️</div>
           <div>
             <div class="rec-label {risk_color}">{res['health_status']}</div>
             <div class="rec-reason">
@@ -133,7 +132,7 @@ def page_portfolio():
             st.plotly_chart(fig_bar, use_container_width=True)
             
     # Holdings Detail Table
-    st.markdown('<div class="section-title">📄 Holdings Breakdown Table</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Holdings Breakdown Table</div>', unsafe_allow_html=True)
     df_display = pd.DataFrame(res["stocks"])
     df_display = df_display.rename(columns={
         "ticker": "Ticker", "name": "Company", "shares": "Shares",

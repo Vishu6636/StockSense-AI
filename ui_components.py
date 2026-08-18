@@ -278,7 +278,7 @@ def render_ticker_bar():
 
 def render_navbar():
     current_page = st.session_state.page
-    market = st.session_state.get("market_mode", "🇮🇳 India")
+    market = st.session_state.get("market_mode", "India")
 
     nav_items = [
         ("Home", "home"),
@@ -440,13 +440,13 @@ def render_navbar():
     with c_mode:
         selected_market = st.radio(
             "Market",
-            ["IN ₹ India", "US $ US"],
+            ["India (₹)", "US ($)"],
             horizontal=True,
             index=0 if "India" in market else 1,
             label_visibility="collapsed"
         )
-        resolved_market = "🇮🇳 India" if "India" in selected_market else "🇺🇸 US"
-        if resolved_market != st.session_state.get("market_mode", "🇮🇳 India"):
+        resolved_market = "India" if "India" in selected_market else "US"
+        if resolved_market != st.session_state.get("market_mode", "India"):
             st.session_state.market_mode = resolved_market
             st.session_state._currency = "₹" if "India" in resolved_market else "$"
             if "pro_df" in st.session_state: del st.session_state["pro_df"]
@@ -550,7 +550,7 @@ def render_stock_header(info):
 
 def render_sebi_disclaimer():
     st.markdown("""<div style="background:rgba(235,91,60,.06);border:1px solid rgba(235,91,60,.15);border-radius:10px;padding:12px 16px;margin-top:16px">
-      <span style="color:#EB5B3C;font-weight:700;font-size:12px">⚠️ Disclaimer:</span>
+      <span style="color:#EB5B3C;font-weight:700;font-size:12px">Disclaimer:</span>
       <span style="color:#9E9E9E;font-size:12px"> StockSense AI is educational only. NOT registered with SEBI or SEC. Always consult a registered advisor. Investments are subject to market risk.</span>
     </div>""", unsafe_allow_html=True)
 
@@ -676,7 +676,7 @@ def radar_chart(info):
 # ═══════════════════════════════════════════
 
 def render_sip_calculator():
-    st.markdown('<div class="section-title">💡 SIP & Wealth Growth Calculator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">SIP & Wealth Growth Calculator</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-subtitle">Simulate long-term wealth creation with Systematic Investment Plans (SIP) or One-time Lumpsum investments.</div>', unsafe_allow_html=True)
     
     currency = st.session_state.get("_currency", "₹")
@@ -715,8 +715,8 @@ def render_sip_calculator():
     st.plotly_chart(fig, use_container_width=True)
 
 
-def render_sector_heatmap(market_mode="🇮🇳 India"):
-    st.markdown('<div class="section-title">🔥 Sector Performance Heatmap</div>', unsafe_allow_html=True)
+def render_sector_heatmap(market_mode="India"):
+    st.markdown('<div class="section-title">Sector Performance Heatmap</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-subtitle">Real-time daily performance across key market sectors and industry groups.</div>', unsafe_allow_html=True)
     
     df = get_sector_heatmap_data(market_mode)
@@ -744,13 +744,13 @@ def render_sector_heatmap(market_mode="🇮🇳 India"):
             </div>
             """, unsafe_allow_html=True)
             
-    with st.expander("📊 Detailed Sector Breakdown Table"):
+    with st.expander("Detailed Sector Breakdown Table"):
         st.dataframe(df, use_container_width=True)
 
 
 def render_eli5_toggle():
     current_val = st.session_state.get("eli5_mode", False)
-    val = st.toggle("💡 Explain Like I'm New (Beginner Mode)", value=current_val, key="eli5_mode_toggle_key")
+    val = st.toggle("Explain Like I'm New (Beginner Mode)", value=current_val, key="eli5_mode_toggle_key")
     st.session_state.eli5_mode = val
     return val
 
@@ -763,7 +763,7 @@ def render_eli5_card(metric_name: str, value):
     st.markdown(f"""
     <div style="background:rgba(124,92,252,0.08);border:1px solid rgba(124,92,252,0.25);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <strong style="color:#FAFAFA">💡 {info['title']}</strong>
+        <strong style="color:#FAFAFA">{info['title']}</strong>
         {badge}
       </div>
       <div style="color:#9E9E9E">{info['desc']}</div>
@@ -772,7 +772,7 @@ def render_eli5_card(metric_name: str, value):
 
 
 def render_insider_tracker(ticker: str, info: dict):
-    st.markdown('<div class="section-title">👔 Insider & Promoter Ownership Tracker</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Insider & Promoter Ownership Tracker</div>', unsafe_allow_html=True)
     
     data = get_insider_ownership_analysis(ticker, info)
     c1, c2 = st.columns([1, 1])
@@ -806,12 +806,12 @@ def render_insider_tracker(ticker: str, info: dict):
         st.plotly_chart(fig, use_container_width=True)
 
 
-def render_peer_comparison_card(ticker: str, market_mode: str = "🇮🇳 India"):
+def render_peer_comparison_card(ticker: str, market_mode: str = "India"):
     peers = get_sector_peers_cached(ticker, market_mode)
     if not peers:
         return
         
-    st.markdown('<div class="section-title">🔍 Auto-Suggested Sector Peers</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Auto-Suggested Sector Peers</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-subtitle">Head-to-head quick comparison with top competitors in the same industry.</div>', unsafe_allow_html=True)
     
     cols = st.columns(len(peers))

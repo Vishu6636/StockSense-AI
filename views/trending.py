@@ -58,7 +58,7 @@ def page_trending():
     m_name = "India" if "India" in market else "US"
     _cur = st.session_state.get("_currency", "₹")
 
-    tab1, tab2 = st.tabs(["📈 Highlighted Daily Movers", "🔥 Sector Heatmap"])
+    tab1, tab2 = st.tabs(["Highlighted Daily Movers", "Sector Heatmap"])
 
     with tab1:
         st.markdown(f'<div class="section-title">Daily Highlighted Movers ({m_name})</div>', unsafe_allow_html=True)

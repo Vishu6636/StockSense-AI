@@ -49,26 +49,26 @@ def get_dividend_yield(info):
 
 def render_fundamentals(ticker, info):
     if info.get("_fallback_mode"):
-        st.caption("⚠️ Extended fundamentals temporarily unavailable, showing limited data.")
+        st.caption("Extended fundamentals temporarily unavailable, showing limited data.")
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        st.markdown('<div class="section-title" style="margin-top:0">📊 Company Essentials</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title" style="margin-top:0">Company Essentials</div>', unsafe_allow_html=True)
     with c2:
         stock_name = info.get("longName") or info.get("shortName") or ticker
         wl = st.session_state.get("watchlist", [])
         in_watchlist = any(w["ticker"] == ticker for w in wl)
         if st.session_state.logged_in:
             if in_watchlist:
-                if st.button("✅ Saved", key=f"fund_wl_rm_{ticker}", type="secondary", use_container_width=True):
+                if st.button("Saved", key=f"fund_wl_rm_{ticker}", type="secondary", use_container_width=True):
                     st.session_state.watchlist = [w for w in wl if w["ticker"] != ticker]
                     st.rerun()
             else:
-                if st.button("⭐ Watch", key=f"fund_wl_add_{ticker}", use_container_width=True):
+                if st.button("Watchlist", key=f"fund_wl_add_{ticker}", use_container_width=True):
                     st.session_state.watchlist.append({"name": stock_name, "ticker": ticker})
                     st.rerun()
         else:
-            if st.button("🔒 Login to Watch", key=f"fund_wl_lock_{ticker}", type="secondary", use_container_width=True):
+            if st.button("Login to Watch", key=f"fund_wl_lock_{ticker}", type="secondary", use_container_width=True):
                 st.session_state.prev_page = st.session_state.page
                 st.session_state.page = "login"
                 st.rerun()
@@ -149,7 +149,7 @@ def render_technicals(ta, hist):
     if not ta:
         st.warning("Not enough data for technical analysis (need 30+ trading days).")
         return
-    st.markdown('<div class="section-title">📉 Technical Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Technical Analysis</div>', unsafe_allow_html=True)
     _cur = st.session_state.get("_currency", "₹")
     rsi_val = None
     try:
@@ -162,8 +162,8 @@ def render_technicals(ta, hist):
         support_val = float(ta["support"].iloc[-1]) if ta.get("support") is not None else 0
         resistance_val = float(ta["resistance"].iloc[-1]) if ta.get("resistance") is not None else 0
         vol_ratio = float(ta["vol_sma5"].iloc[-1] / ta["vol_sma20"].iloc[-1]) if ta.get("vol_sma5") is not None and float(ta["vol_sma20"].iloc[-1]) > 0 else 1
-        vol_trend = "Increasing 📈" if vol_ratio > 1.1 else ("Decreasing 📉" if vol_ratio < 0.9 else "Stable →")
-        breaking = "Breaking Out ↑" if close_val > resistance_val*0.98 else ("Near Support ↓" if close_val < support_val*1.02 else "Ranging ↔")
+        vol_trend = "Increasing" if vol_ratio > 1.1 else ("Decreasing" if vol_ratio < 0.9 else "Stable")
+        breaking = "Breaking Out" if close_val > resistance_val*0.98 else ("Near Support" if close_val < support_val*1.02 else "Ranging")
         chips = [
             metric_chip("RSI (14)",f"{rsi_val:.1f}","green" if rsi_val<40 else ("red" if rsi_val>70 else "gold"),"RSI"),
             metric_chip("MACD","Bullish" if macd_val>sig_val else "Bearish","green" if macd_val>sig_val else "red","MACD"),
@@ -176,39 +176,38 @@ def render_technicals(ta, hist):
         render_metric_row(chips)
     except (KeyError, IndexError, TypeError, ValueError): pass
 
-    tab1,tab2,tab3,tab4 = st.tabs(["🕯️ Candles","📈 RSI","📊 MACD","🎯 Bollinger"])
+    tab1,tab2,tab3,tab4 = st.tabs(["Candles","RSI","MACD","Bollinger"])
     with tab1:
         st.plotly_chart(candlestick_chart(hist,"Price (1 Year)"), key="technical_candlestick", use_container_width=True, config={"displayModeBar":False})
         st.plotly_chart(volume_chart(hist), key="technical_volume", use_container_width=True, config={"displayModeBar":False})
     with tab2:
         st.plotly_chart(rsi_chart(ta["rsi"].dropna()), key="technical_rsi", use_container_width=True, config={"displayModeBar":False})
         if rsi_val is not None:
-            if rsi_val<30: st.success("🟢 RSI below 30 — **Oversold**. Potential buying opportunity!")
-            elif rsi_val>70: st.error("🔴 RSI above 70 — **Overbought**. Be cautious!")
-            else: st.info(f"🟡 RSI at {rsi_val:.0f} — Neutral zone.")
+            if rsi_val<30: st.success("RSI below 30 — Oversold. Potential buying opportunity!")
+            elif rsi_val>70: st.error("RSI above 70 — Overbought. Be cautious!")
+            else: st.info(f"RSI at {rsi_val:.0f} — Neutral zone.")
         else:
-            st.info("🟡 RSI data unavailable for neutral zone check.")
+            st.info("RSI data unavailable for neutral zone check.")
     with tab3:
         st.plotly_chart(macd_chart(ta["macd"].dropna(),ta["signal"].dropna(),ta["macd_hist"].dropna()), key="technical_macd", use_container_width=True, config={"displayModeBar":False})
     with tab4:
         st.plotly_chart(bollinger_chart(hist,ta), key="technical_bollinger", use_container_width=True, config={"displayModeBar":False})
 
 def render_analyst_consensus(recs):
-    st.markdown('<div class="section-title">🎯 Analyst Consensus</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Analyst Consensus</div>', unsafe_allow_html=True)
     consensus = get_analyst_consensus(recs)
     if consensus is None:
         st.markdown("""<div class="ss-card" style="text-align:center;padding:20px">
-          <div style="font-size:1.8rem;margin-bottom:8px">📡</div>
           <div style="color:#9E9E9E">Analyst ratings not available for this stock.</div>
         </div>""", unsafe_allow_html=True)
         return
     total=consensus["total"];sb=consensus["strongBuy"];b=consensus["buy"];h=consensus["hold"];s=consensus["sell"];ss=consensus["strongSell"]
     bull_pct=(sb+b)/total*100;bear_pct=(ss+s)/total*100;needle_pos=bull_pct
-    if bull_pct>=70: label,color="Strongly Bullish 🐂","#00D09C"
-    elif bull_pct>=50: label,color="Bullish 📈","#90EE90"
-    elif bear_pct>=70: label,color="Strongly Bearish 🐻","#EB5B3C"
-    elif bear_pct>=50: label,color="Bearish 📉","#FF8C00"
-    else: label,color="Neutral ⚖️","#E8A838"
+    if bull_pct>=70: label,color="Strongly Bullish","#00D09C"
+    elif bull_pct>=50: label,color="Bullish","#90EE90"
+    elif bear_pct>=70: label,color="Strongly Bearish","#EB5B3C"
+    elif bear_pct>=50: label,color="Bearish","#FF8C00"
+    else: label,color="Neutral","#E8A838"
     cols=st.columns(5)
     for col,(lbl,val) in zip(cols,[("Strong Buy",sb),("Buy",b),("Hold",h),("Sell",s),("Strong Sell",ss)]):
         clr="#00D09C" if "Buy" in lbl else ("#EB5B3C" if "Sell" in lbl else "#E8A838")
