@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -1124,7 +1125,7 @@ def analyze_portfolio_holdings(holdings_list: list, market_mode: str = "🇮🇳
             "pnl": round(pnl, 2),
             "pnl_pct": round(pnl_pct, 2),
             "sector": sec,
-            "pe": round(pe, 1) if pe else "N/A"
+            "pe": round(pe, 1) if (pe and isinstance(pe, (int, float)) and pe > 0) else None
         })
         
     if not valid_stocks:

@@ -141,6 +141,9 @@ def page_portfolio():
         "invested": f"Invested ({currency})", "current_value": f"Current Val ({currency})",
         "pnl": f"P&L ({currency})", "pnl_pct": "P&L %", "sector": "Sector", "pe": "P/E"
     })
+    # Format missing P/E or NaN values safely for PyArrow display
+    if "P/E" in df_display.columns:
+        df_display["P/E"] = df_display["P/E"].apply(lambda x: "—" if (pd.isna(x) or x is None or x == "N/A") else f"{float(x):.1f}")
     st.dataframe(df_display, use_container_width=True)
     st.markdown('<hr class="ss-sep"/>', unsafe_allow_html=True)
     render_sebi_disclaimer()
