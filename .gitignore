@@ -30,7 +30,10 @@ env/
 Thumbs.db
 .DS_Store
 
-# Dev-only helper scripts & scratch files
+# Internal dev logs & scratch documentation
+docs/
+*_DAY*.md
+*_SCOPING.md
 create_tickers.py
 gif_b64.txt
 README (1).md

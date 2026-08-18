@@ -131,8 +131,6 @@ StockSense-AI/
 ├── tests/                      # Automated unit test suite (pytest)
 │   ├── test_data_service.py    # Core data & technical indicator tests
 │   └── test_new_features.py    # Phase 4 feature tests (SIP, Heatmap, ELI5, Insider, Peers, Portfolio)
-├── docs/                       # Project documentation & dev history
-│   └── dev-logs/               # Development phase reports & audits (Days 1–14)
 ├── tickers_india.json          # 500+ Indian ticker mappings (NSE/BSE)
 └── tickers_us.json             # 300+ US ticker mappings (NASDAQ/NYSE)
 ```
