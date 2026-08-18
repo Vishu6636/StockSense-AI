@@ -45,9 +45,12 @@ def get_dividend_yield(info):
     price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
     if dr and price and isinstance(dr, (int, float)) and isinstance(price, (int, float)) and price > 0:
         return (float(dr) / float(price)) * 100
-    return 0.0
+    return None
 
 def render_fundamentals(ticker, info):
+    if info.get("_fallback_mode"):
+        st.caption("⚠️ Extended fundamentals temporarily unavailable, showing limited data.")
+
     c1, c2 = st.columns([3, 1])
     with c1:
         st.markdown('<div class="section-title" style="margin-top:0">📊 Company Essentials</div>', unsafe_allow_html=True)
@@ -70,26 +73,35 @@ def render_fundamentals(ticker, info):
                 st.session_state.page = "login"
                 st.rerun()
 
-    pe = info.get("trailingPE") or info.get("forwardPE") or 0
-    if isinstance(pe, str): pe = 0
-    pb = info.get("priceToBook") or 0
+    raw_pe = info.get("trailingPE") if info.get("trailingPE") is not None else info.get("forwardPE")
+    raw_pb = info.get("priceToBook")
+    raw_de = info.get("debtToEquity")
+    raw_eps = info.get("trailingEps")
+    raw_sales_g = info.get("revenueGrowth")
+    raw_profit_g = info.get("earningsGrowth")
+    raw_npm = info.get("profitMargins")
+    raw_insider = info.get("heldPercentInsiders")
+
     roe = get_roe(info)
-    de = info.get("debtToEquity") or 0
-    if de > 100: de = de/100
     div_yield = get_dividend_yield(info)
-    eps = info.get("trailingEps") or 0
-    sales_g = (info.get("revenueGrowth") or 0)*100
-    profit_g = (info.get("earningsGrowth") or 0)*100
-    wk52h = info.get("fiftyTwoWeekHigh") or 0
-    wk52l = info.get("fiftyTwoWeekLow") or 0
-    book_val = info.get("bookValue") or 0
-    promoter = (info.get("heldPercentInsiders") or 0)*100
-    npm = (info.get("profitMargins") or 0)*100
+
+    if raw_de is not None and isinstance(raw_de, (int, float)):
+        de_val = float(raw_de) / 100 if float(raw_de) > 100 else float(raw_de)
+    else:
+        de_val = None
+
+    sales_g = (float(raw_sales_g) * 100) if (raw_sales_g is not None and isinstance(raw_sales_g, (int, float))) else None
+    profit_g = (float(raw_profit_g) * 100) if (raw_profit_g is not None and isinstance(raw_profit_g, (int, float))) else None
+    npm = (float(raw_npm) * 100) if (raw_npm is not None and isinstance(raw_npm, (int, float))) else None
+    promoter = (float(raw_insider) * 100) if (raw_insider is not None and isinstance(raw_insider, (int, float))) else None
+    
+    wk52h = info.get("fiftyTwoWeekHigh")
+    wk52l = info.get("fiftyTwoWeekLow")
     _cur = st.session_state.get("_currency", "₹")
 
-    def pc(v,g=10):
+    def pc(v, g=10):
         if not isinstance(v, (int, float)) or v != v: return ""
-        return "green" if v>=g else ("red" if v<0 else "")
+        return "green" if v >= g else ("red" if v < 0 else "")
 
     def safe_ratio(v):
         if v is None: return "—"
@@ -99,27 +111,29 @@ def render_fundamentals(ticker, info):
             return val
         except (TypeError, ValueError): return "—"
 
-    safe_pe = safe_ratio(pe)
-    safe_pb = safe_ratio(pb)
-    safe_de = safe_ratio(de)
+    safe_pe = safe_ratio(raw_pe)
+    safe_pb = safe_ratio(raw_pb)
+    safe_de = safe_ratio(de_val)
 
     pe_str = f"{safe_pe:.1f}" if isinstance(safe_pe, float) else "—"
     pb_str = f"{safe_pb:.2f}" if isinstance(safe_pb, float) else "—"
     de_str = f"{safe_de:.2f}" if isinstance(safe_de, float) else "—"
+    eps_str = f"{_cur}{float(raw_eps):.2f}" if (raw_eps is not None and isinstance(raw_eps, (int, float))) else "—"
+    promoter_str = f"{promoter:.1f}%" if (promoter is not None and isinstance(promoter, (int, float)) and promoter > 0) else "—"
 
     chips = [
         metric_chip("P/E Ratio", pe_str, "green" if isinstance(safe_pe, float) and 0<safe_pe<25 else "red" if isinstance(safe_pe, float) and safe_pe>40 else ""),
         metric_chip("P/B Ratio", pb_str, "green" if isinstance(safe_pb, float) and 0<safe_pb<3 else "red" if isinstance(safe_pb, float) and safe_pb>6 else ""),
         metric_chip("ROE", safe_pct(roe, max_val=2000.0), pc(roe, 15) if roe is not None else ""),
         metric_chip("Debt/Equity", de_str, "green" if isinstance(safe_de, float) and safe_de<0.5 else "red" if isinstance(safe_de, float) and safe_de>2 else ""),
-        metric_chip("Div Yield", safe_pct(div_yield, max_val=100.0, min_val=0.0), "green" if div_yield>1 else ""),
-        metric_chip("EPS (TTM)", f"{_cur}{eps:.2f}" if eps else "N/A", "green" if eps>0 else "red"),
+        metric_chip("Div Yield", safe_pct(div_yield, max_val=100.0, min_val=0.0), "green" if (div_yield and div_yield>1) else ""),
+        metric_chip("EPS (TTM)", eps_str, "green" if (raw_eps and raw_eps>0) else ("red" if (raw_eps and raw_eps<0) else "")),
         metric_chip("Sales Growth", safe_pct(sales_g, max_val=500), pc(sales_g, 10)),
         metric_chip("Profit Growth", safe_pct(profit_g, max_val=500), pc(profit_g, 10)),
         metric_chip("Net Margin", safe_pct(npm, max_val=100), pc(npm, 10)),
-        metric_chip("52W High", f"{_cur}{wk52h:,.0f}" if wk52h else "N/A", ""),
-        metric_chip("52W Low", f"{_cur}{wk52l:,.0f}" if wk52l else "N/A", ""),
-        metric_chip("Promoter Hold", f"{promoter:.1f}%" if promoter else "N/A", "green" if promoter>50 else ""),
+        metric_chip("52W High", f"{_cur}{wk52h:,.0f}" if wk52h else "—", ""),
+        metric_chip("52W Low", f"{_cur}{wk52l:,.0f}" if wk52l else "—", ""),
+        metric_chip("Promoter Hold", promoter_str, "green" if (promoter and promoter>50) else ""),
     ]
     render_metric_row(chips)
     

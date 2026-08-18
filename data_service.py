@@ -257,49 +257,147 @@ def get_index_data(market_indices: dict):
 
     return results
 
+def _alpha_vantage_overview(ticker: str) -> dict:
+    """Fetches fundamental overview data from Alpha Vantage API as a secondary fallback."""
+    api_key = st.secrets.get("ALPHA_VANTAGE_KEY") or st.secrets.get("ALPHA_VANTAGE_API_KEY", "")
+    if not api_key:
+        return {}
+    sym = ticker.replace(".NS", "").replace(".BO", "")
+    url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={sym}&apikey={api_key}"
+    try:
+        r = requests.get(url, timeout=4.0)
+        if r.status_code == 200:
+            data = r.json()
+            if data and isinstance(data, dict) and "Name" in data:
+                def _parse(v):
+                    if v is None or v == "None" or v == "-" or v == "None":
+                        return None
+                    try:
+                        f = float(v)
+                        return None if f != f else f
+                    except (ValueError, TypeError):
+                        return None
+
+                pe = _parse(data.get("PERatio"))
+                pb = _parse(data.get("PriceToBookRatio"))
+                roe = _parse(data.get("ReturnOnEquityTTM"))
+                eps = _parse(data.get("EPS"))
+                div_y = _parse(data.get("DividendYield"))
+                sales_g = _parse(data.get("QuarterlyRevenueGrowthYOY"))
+                earnings_g = _parse(data.get("QuarterlyEarningsGrowthYOY"))
+                profit_m = _parse(data.get("ProfitMargin"))
+                de = _parse(data.get("DebtToEquityTTM"))
+                mcap = _parse(data.get("MarketCapitalization"))
+                hi52 = _parse(data.get("52WeekHigh"))
+                lo52 = _parse(data.get("52WeekLow"))
+
+                return {
+                    "longName": data.get("Name", ticker),
+                    "sector": data.get("Sector", "N/A"),
+                    "trailingPE": pe,
+                    "priceToBook": pb,
+                    "returnOnEquity": roe,
+                    "debtToEquity": de,
+                    "dividendYield": div_y,
+                    "revenueGrowth": sales_g,
+                    "earningsGrowth": earnings_g,
+                    "profitMargins": profit_m,
+                    "trailingEps": eps,
+                    "marketCap": mcap,
+                    "fiftyTwoWeekHigh": hi52,
+                    "fiftyTwoWeekLow": lo52,
+                    "_source": "AlphaVantage"
+                }
+    except Exception:
+        pass
+    return {}
+
+def _fetch_stock_info_with_fallback(ticker: str) -> dict:
+    """
+    Fetches ticker info using a 2-attempt retry on yfinance, 
+    falls back to Alpha Vantage OVERVIEW, and finally fast_info.
+    Sets _fallback_mode = True if fundamental fields are missing.
+    """
+    info = {}
+    
+    # 1. Retry up to 2 attempts on yfinance t.info (handles transient 429 rate-limits)
+    for attempt in range(2):
+        try:
+            t = yf.Ticker(ticker)
+            res = t.info
+            if res and isinstance(res, dict) and len(res) > 5 and any(k in res for k in ["trailingPE", "marketCap", "currentPrice"]):
+                info = dict(res)
+                break
+        except Exception:
+            pass
+        if attempt == 0:
+            time.sleep(1.0)
+
+    # 2. Secondary Fallback: Alpha Vantage OVERVIEW if yfinance info is empty or missing fundamentals
+    has_fund = info and any(info.get(k) is not None for k in ["trailingPE", "returnOnEquity", "dividendYield"])
+    if not has_fund:
+        av_info = _alpha_vantage_overview(ticker)
+        if av_info:
+            if info:
+                for k, v in av_info.items():
+                    if info.get(k) is None and v is not None:
+                        info[k] = v
+            else:
+                info = av_info
+
+    # 3. Final Fallback: fast_info if price/mcap/52w range is still missing
+    if not info or not info.get("currentPrice"):
+        try:
+            t = yf.Ticker(ticker)
+            fi = getattr(t, "fast_info", None)
+            if fi:
+                price = getattr(fi, "last_price", 0) or getattr(fi, "previous_close", 0) or 0
+                prev = getattr(fi, "previous_close", 0) or 0
+                mcap = getattr(fi, "market_cap", 0) or 0
+                hi = getattr(fi, "year_high", 0) or 0
+                lo = getattr(fi, "year_low", 0) or 0
+                if not info:
+                    info = {}
+                info.update({
+                    "currentPrice": price if price > 0 else info.get("currentPrice", 0),
+                    "previousClose": prev if prev > 0 else info.get("previousClose", 0),
+                    "marketCap": mcap if mcap > 0 else info.get("marketCap", 0),
+                    "fiftyTwoWeekHigh": hi if hi > 0 else info.get("fiftyTwoWeekHigh", 0),
+                    "fiftyTwoWeekLow": lo if lo > 0 else info.get("fiftyTwoWeekLow", 0),
+                    "longName": info.get("longName") or ticker
+                })
+        except Exception:
+            pass
+
+    # 4. Final NSEPython quote fallback for Indian stocks if currentPrice is still 0
+    if (not info or not info.get("currentPrice")) and (ticker.endswith(".NS") or ticker.endswith(".BO")):
+        q = _nsepython_quote(ticker)
+        if q.get("c"):
+            if not info:
+                info = {}
+            info.update({
+                "currentPrice": q.get("c"),
+                "previousClose": q.get("pc"),
+                "fiftyTwoWeekHigh": q.get("h"),
+                "fiftyTwoWeekLow": q.get("l"),
+                "longName": ticker
+            })
+
+    # Flag _fallback_mode = True if fundamental metrics (P/E, ROE, P/B) could not be retrieved
+    if not any(info.get(k) is not None for k in ["trailingPE", "forwardPE", "priceToBook", "returnOnEquity", "debtToEquity"]):
+        info["_fallback_mode"] = True
+
+    return info
+
 @st.cache_data(ttl=1802)
 def get_stock_info_cached(ticker):
-    try:
-        t = yf.Ticker(ticker)
-        return t.info
-    except Exception:
-        return {}
+    return _fetch_stock_info_with_fallback(ticker)
 
 @st.cache_data(ttl=1202)
 def get_stock_data(ticker):
     try:
         t = yf.Ticker(ticker)
-        
-        info = {}
-        try:
-            info = t.info
-        except Exception:
-            pass
-            
-        if not info:
-            try:
-                fi = t.fast_info
-                info = {
-                    "currentPrice": getattr(fi, "last_price", 0),
-                    "previousClose": getattr(fi, "previous_close", 0),
-                    "marketCap": getattr(fi, "market_cap", 0),
-                    "fiftyTwoWeekHigh": getattr(fi, "year_high", 0),
-                    "fiftyTwoWeekLow": getattr(fi, "year_low", 0),
-                    "longName": ticker
-                }
-            except Exception:
-                pass
-                
-        if not info and (ticker.endswith(".NS") or ticker.endswith(".BO")):
-            q = _nsepython_quote(ticker)
-            if q.get("c"):
-                info = {
-                    "currentPrice": q.get("c"),
-                    "previousClose": q.get("pc"),
-                    "fiftyTwoWeekHigh": q.get("h"),
-                    "fiftyTwoWeekLow": q.get("l"),
-                    "longName": ticker
-                }
+        info = _fetch_stock_info_with_fallback(ticker)
 
         hist_1y = None
         try:
