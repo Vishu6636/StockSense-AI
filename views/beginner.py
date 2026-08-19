@@ -59,12 +59,88 @@ def page_beginner():
         bq = st.session_state.bq
         risk_raw = bq.get("risk", "Medium")
         budget = bq.get("budget", None)
+        horizon_raw = bq.get("horizon", "Medium-term (1–3 years)")
+
+        # Risk base mapping
         if "Low" in risk_raw: max_pe, max_de, min_roe = 20, 0.7, 12
         elif "High" in risk_raw: max_pe, max_de, min_roe = 40, 2.0, 5
         else: max_pe, max_de, min_roe = 28, 1.2, 10
 
+        # Bug 3 — Subtle Horizon Adjustments
+        if "Short" in horizon_raw:
+            max_pe -= 3; max_de -= 0.1; min_roe += 2
+        elif "Mid-Long" in horizon_raw:
+            max_pe += 3; max_de += 0.1; min_roe -= 1
+        elif "Long" in horizon_raw:
+            max_pe += 5; max_de += 0.2; min_roe -= 2
+
+        max_pe = max(10, max_pe)
+        max_de = max(0.1, round(max_de, 2))
+        min_roe = max(1, min_roe)
+
+        # Sector Mapping & Defence Ticker Helper (Bug 1)
+        sector_map_dict = {
+            "Technology": ["Information Technology", "Communication Services", "Technology"],
+            "Banking & Finance": ["Financial Services", "Financials"],
+            "Pharma & Healthcare": ["Healthcare", "Health Care", "Pharma"],
+            "Energy & Power": ["Oil Gas & Consumable Fuels", "Power", "Energy", "Utilities"],
+            "FMCG & Consumer": ["Fast Moving Consumer Goods", "Consumer Durables", "Consumer Services", "Consumer Staples", "Consumer Discretionary"],
+            "Auto & EV": ["Automobile and Auto Components"],
+            "Infrastructure": ["Construction", "Construction Materials", "Capital Goods", "Realty", "Real Estate", "Industrials", "Materials"],
+            "Defence": ["Capital Goods", "Industrials"],
+        }
+        defence_tickers = {"HAL.NS", "BEL.NS", "MAZDOCK.NS", "COCHINSHIP.NS", "BDL.NS"}
+
+        # Market Cap Rank Priority for Quick Scan (Bug 2)
+        top_mcap_priority = [
+            "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "BHARTIARTL.NS", "ICICIBANK.NS", "INFY.NS", "SBIN.NS", "ITC.NS",
+            "HINDUNILVR.NS", "LT.NS", "HCLTECH.NS", "SUNPHARMA.NS", "KOTAKBANK.NS", "M&M.NS", "TATAMOTORS.NS", "NTPC.NS",
+            "AXISBANK.NS", "ONGC.NS", "ADANIENT.NS", "MARUTI.NS", "TITAN.NS", "ULTRACEMCO.NS", "POWERGRID.NS", "BAJFINANCE.NS",
+            "WIPRO.NS", "ASIANPAINT.NS", "COALINDIA.NS", "TATASTEEL.NS", "JSWSTEEL.NS", "HAL.NS", "BEL.NS", "VBL.NS",
+            "ZOMATO.NS", "NESTLEIND.NS", "SIEMENS.NS", "DLF.NS", "GRASIM.NS", "TECHM.NS", "HDFCLIFE.NS", "IOC.NS",
+            "PIDILITIND.NS", "HINDALCO.NS", "BPCL.NS", "ADANIPORTS.NS", "SHRIRAMFIN.NS", "SBILIFE.NS", "INDIGO.NS", "GAIL.NS",
+            "BRITANNIA.NS", "TRENT.NS", "EICHERMOT.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS", "BAJAJ-AUTO.NS",
+            "NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "UNH",
+            "MA", "WMT", "XOM", "PG", "COST", "JNJ", "HD", "ORCL", "ABBV", "BAC", "CRM", "KO", "NFLX", "CVX", "AMD",
+            "PEP", "MRK", "TMO", "LIN", "ADBE", "ACN", "WFC", "MCD", "DIS", "CSCO", "GE", "TXN", "PM", "MS", "AMAT"
+        ]
+        top_mcap_rank = {ticker: i for i, ticker in enumerate(top_mcap_priority)}
+
         ticker_data = load_ticker_list(market)
-        stock_map = {t["name"]: t["ticker"] for t in ticker_data} if ticker_data else {}
+        selected_sectors = bq.get("sectors", ["No Preference"])
+        if isinstance(selected_sectors, str):
+            selected_sectors = [selected_sectors]
+            
+        no_pref = "No Preference" in selected_sectors or not selected_sectors
+
+        if not no_pref and ticker_data:
+            allowed_sectors = set()
+            for s_ui in selected_sectors:
+                allowed_sectors.update(sector_map_dict.get(s_ui, []))
+            
+            is_defence = "Defence" in selected_sectors
+            filtered_tickers = []
+            for t in ticker_data:
+                t_sec = t.get("sector", "")
+                t_tick = t.get("ticker", "")
+                t_name = t.get("name", "").lower()
+                
+                matches = t_sec in allowed_sectors
+                if is_defence and (t_tick in defence_tickers or "defence" in t_name or "defense" in t_name):
+                    matches = True
+                if matches:
+                    filtered_tickers.append(t)
+
+            if len(filtered_tickers) < 10:
+                st.info("Limited stocks available in selected sectors — showing closest matches")
+                scanned_tickers = ticker_data
+            else:
+                scanned_tickers = filtered_tickers
+        else:
+            scanned_tickers = ticker_data
+
+        scanned_tickers_sorted = sorted(scanned_tickers, key=lambda t: top_mcap_rank.get(t["ticker"], 9999))
+        stock_map = {t["name"]: t["ticker"] for t in scanned_tickers_sorted} if scanned_tickers_sorted else {}
         
         if st.session_state.use_quick50:
             stocks_to_scan = {k: v for i, (k, v) in enumerate(stock_map.items()) if i < 50}
@@ -74,8 +150,8 @@ def page_beginner():
         m_name = "Indian" if "India" in market else "US"
         scan_label = "Top 50" if st.session_state.use_quick50 else f"{len(stock_map)}+"
         st.markdown(f"""<div style="background:rgba(0,208,156,.08);border:1px solid rgba(0,208,156,.2);border-radius:10px;padding:12px 16px;margin-bottom:16px">
-          Scanning {scan_label} {m_name} market stocks with your filters...<br>
-          <span style="font-size:11px;color:#616161">Filtering by risk parameters.</span></div>""", unsafe_allow_html=True)
+          Scanning {scan_label} {m_name} market stocks tailored for your {horizon_raw} horizon...<br>
+          <span style="font-size:11px;color:#616161">Filtering by risk parameters and sector preferences.</span></div>""", unsafe_allow_html=True)
 
         df = screen_stocks_with_progress(stocks_to_scan, max_pe=max_pe, max_de=max_de, min_roe=min_roe, budget=budget)
 

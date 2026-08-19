@@ -573,7 +573,22 @@ def screen_stocks_with_progress(stocks_dict, max_pe=25, max_de=1.0, min_roe=10,
             bonus = sum((10 if sales_growth is not None and sales_growth > 10 else 0,
                          10 if profit_growth is not None and profit_growth > 10 else 0,
                          5 if div_yield > 1 else 0))
-            score = min(100, round(qualification * 0.8 + bonus, 1))
+
+            # Data completeness penalty & score capping for sparse data
+            total_expected_checks = 6 if (min_npm > 0 or min_eps > 0) else 4
+            valid_check_count = len(checks)
+            completeness_factor = min(1.0, valid_check_count / float(total_expected_checks))
+
+            if valid_check_count < 3:
+                max_score_cap = 75.0
+            elif valid_check_count < 4:
+                max_score_cap = 82.0
+            else:
+                max_score_cap = 100.0
+
+            raw_score = qualification * 0.8 * completeness_factor + bonus
+            score = min(max_score_cap, round(raw_score, 1))
+
             # Do not recommend a company when fewer than two independent
             # fundamentals are available.
             is_pass = len(checks) >= 2 and qualification >= 60
